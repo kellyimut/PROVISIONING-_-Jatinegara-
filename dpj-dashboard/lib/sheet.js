@@ -52,12 +52,24 @@ function parseLooseDate(raw) {
 
   m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s);
   if (m) {
-    let [, d, mo, y] = m;
+    let [, first, second, y] = m;
     if (y.length === 2) y = `20${y}`;
-    const dd = Number(d);
-    const mm = Number(mo);
-    if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
-    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const a = Number(first);
+    const b = Number(second);
+
+    // Sheet sumber TERKONFIRMASI berisi campuran format tanggal teks: kebanyakan
+    // "dd/mm/yyyy" (konvensi Indonesia, mis. "20/06/2026"), tapi sebagian sel
+    // (kemungkinan sel bertipe Date asli dengan format locale AS) muncul sebagai
+    // "mm/dd/yyyy" (mis. "6/20/2026" untuk 20 Juni). Coba konvensi Indonesia
+    // dulu; jika tidak valid (mis. "bulan" > 12), coba konvensi AS sebagai
+    // cadangan -- supaya kedua gaya penulisan tetap terhitung dengan benar.
+    if (a >= 1 && a <= 31 && b >= 1 && b <= 12) {
+      return `${y}-${String(b).padStart(2, "0")}-${String(a).padStart(2, "0")}`;
+    }
+    if (b >= 1 && b <= 31 && a >= 1 && a <= 12) {
+      return `${y}-${String(a).padStart(2, "0")}-${String(b).padStart(2, "0")}`;
+    }
+    return null;
   }
 
   return null;
