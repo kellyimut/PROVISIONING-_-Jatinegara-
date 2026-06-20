@@ -1,6 +1,6 @@
-const { fetchSheetRecords } = require("../../lib/sheet");
+import { fetchSheetRecords } from "../../lib/sheet";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   try {
     const { records, missingFields } = await fetchSheetRecords();
@@ -17,4 +17,4 @@ module.exports = async function handler(req, res) {
       message: err && err.message ? err.message : "Terjadi kesalahan saat mengambil data.",
     });
   }
-};
+}
