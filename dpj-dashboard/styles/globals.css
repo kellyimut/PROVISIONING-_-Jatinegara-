@@ -1,0 +1,199 @@
+/* =============================================================================
+   DASHBOARD PROVISIONING — JATINEGARA
+   Token sistem warna & tipografi. Identitas visual: "sinyal fiber" — garis
+   gradien tipis yang berdenyut, terinspirasi dari sinyal optik pada jaringan
+   FTTH yang sedang diawasi oleh dashboard ini (ODP, Workorder, dst).
+   ========================================================================== */
+
+:root {
+  --font-display: "Sora", "Plus Jakarta Sans", sans-serif;
+  --font-body: "Plus Jakarta Sans", "Sora", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+/* ---------- TEMA 1 — FIBER NIGHT (dark, default) ---------- */
+:root[data-theme="fiber-night"] {
+  --bg: #0a0f1c;
+  --bg-soft: radial-gradient(circle at 12% 0%, #122236 0%, #0a0f1c 45%), #0a0f1c;
+  --surface: #101a2c;
+  --surface-2: #16223a;
+  --border: rgba(148, 178, 222, 0.12);
+  --text: #eaf0fb;
+  --text-dim: #8ea0c2;
+  --text-faint: #5d6c8c;
+  --accent: #22d3ee;
+  --accent-2: #f5b544;
+  --accent-soft: rgba(34, 211, 238, 0.14);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+/* ---------- TEMA 2 — DAYLIGHT OPS (light) ---------- */
+:root[data-theme="daylight"] {
+  --bg: #eef1f8;
+  --bg-soft: radial-gradient(circle at 12% 0%, #ffffff 0%, #eef1f8 55%), #eef1f8;
+  --surface: #ffffff;
+  --surface-2: #f5f7fc;
+  --border: rgba(15, 23, 42, 0.08);
+  --text: #101a2c;
+  --text-dim: #51607e;
+  --text-faint: #8b97b0;
+  --accent: #0891a8;
+  --accent-2: #c2740a;
+  --accent-soft: rgba(8, 145, 168, 0.1);
+  --success: #0d9c6f;
+  --warning: #b45309;
+  --danger: #e11d48;
+  --shadow: 0 18px 40px -18px rgba(20, 30, 60, 0.18);
+  color-scheme: light;
+}
+
+/* ---------- TEMA 3 — SIGNAL VIVID (terang) ---------- */
+:root[data-theme="signal-vivid"] {
+  --bg: #3a1f9e;
+  --bg-soft: radial-gradient(circle at 15% -10%, #6d3ad1 0%, #3a1f9e 45%, #1c1166 100%);
+  --surface: rgba(255, 255, 255, 0.1);
+  --surface-2: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.22);
+  --text: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.78);
+  --text-faint: rgba(255, 255, 255, 0.5);
+  --accent: #facc15;
+  --accent-2: #2dd4f5;
+  --accent-soft: rgba(250, 204, 21, 0.18);
+  --success: #4ade80;
+  --warning: #fde047;
+  --danger: #fb7185;
+  --shadow: 0 24px 60px -20px rgba(20, 0, 60, 0.5);
+  color-scheme: dark;
+}
+
+/* ---------- TEMA 4 — MIDNIGHT GOLD (mewah) ---------- */
+:root[data-theme="midnight-gold"] {
+  --bg: #0c0a09;
+  --bg-soft: radial-gradient(circle at 12% 0%, #1c1712 0%, #0c0a09 50%), #0c0a09;
+  --surface: #15110c;
+  --surface-2: #1d1712;
+  --border: rgba(212, 175, 55, 0.18);
+  --text: #f3ecdd;
+  --text-dim: #b3a489;
+  --text-faint: #756a55;
+  --accent: #d4af37;
+  --accent-2: #5eead4;
+  --accent-soft: rgba(212, 175, 55, 0.14);
+  --success: #6ee7b7;
+  --warning: #facc15;
+  --danger: #f87171;
+  --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.4s ease, color 0.4s ease;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: #0a0f1c;
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+/* ---------- Elemen tanda tangan: garis sinyal fiber berdenyut ---------- */
+.fiber-line {
+  position: relative;
+  height: 2px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border);
+}
+.fiber-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent);
+  filter: blur(0.3px);
+  animation: fiber-travel 3.6s linear infinite;
+}
+@keyframes fiber-travel {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.pulse-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  animation: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(52, 211, 153, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fiber-line::after,
+  .pulse-dot {
+    animation: none !important;
+  }
+}
+
+.num-mono {
+  font-family: var(--font-mono);
+}
+
+button {
+  font-family: var(--font-body);
+}
