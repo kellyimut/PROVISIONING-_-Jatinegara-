@@ -64,14 +64,15 @@ function isCompwork(statusBima) {
 }
 
 function statusBreakdown(records) {
-  const counts = new Map();
+  const groups = new Map();
   records.forEach((r) => {
     const key = (r.statusBima || "TANPA STATUS").trim() || "TANPA STATUS";
-    counts.set(key, (counts.get(key) || 0) + 1);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
   });
   const total = records.length;
-  return Array.from(counts.entries())
-    .map(([status, count]) => ({ status, count, percent: total ? Math.round((count / total) * 1000) / 10 : 0 }))
+  return Array.from(groups.entries())
+    .map(([status, rows]) => ({ status, count: rows.length, rows, percent: total ? Math.round((rows.length / total) * 1000) / 10 : 0 }))
     .sort((a, b) => b.count - a.count);
 }
 
