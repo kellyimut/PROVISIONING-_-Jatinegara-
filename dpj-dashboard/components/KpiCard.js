@@ -17,7 +17,7 @@ function Ring({ percent, color }) {
   );
 }
 
-export default function KpiCard({ label, value, suffix, sub, kind = "number", percent, achieved, icon, onClick }) {
+export default function KpiCard({ label, value, suffix, sub, kind = "number", percent, achieved, icon, onClick, badge }) {
   const ringColor = achieved ? "var(--success)" : percent != null && percent < 50 ? "var(--danger)" : "var(--warning)";
   const clickable = !!onClick;
 
@@ -27,8 +27,11 @@ export default function KpiCard({ label, value, suffix, sub, kind = "number", pe
     >
       <div className="top">
         <span className="label">{label}</span>
-        {clickable && <span className="drillHint">Klik detail ↗</span>}
-        {icon}
+        <div className="topRight">
+          {badge && <span className={`badge badge-${badge.toLowerCase()}`}>{badge}</span>}
+          {clickable && <span className="drillHint">↗</span>}
+          {icon}
+        </div>
       </div>
 
       {kind === "percent" ? (
@@ -71,16 +74,26 @@ export default function KpiCard({ label, value, suffix, sub, kind = "number", pe
         }
         .kpi.clickable:active { transform: translateY(0); }
         .top {
-          display: flex; align-items: center; justify-content: space-between;
+          display: flex; align-items: flex-start; justify-content: space-between; gap: 4px;
+        }
+        .topRight {
+          display: flex; align-items: center; gap: 5px; flex-shrink: 0;
         }
         .label {
-          font-size: 12px; font-weight: 600;
+          font-size: 11.5px; font-weight: 600;
           color: var(--text-dim); letter-spacing: 0.01em;
+          line-height: 1.3;
         }
-        .drillHint {
-          font-size: 10px; font-weight: 600;
-          color: var(--accent); opacity: 0.7;
+        .badge {
+          font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+          padding: 2px 6px; border-radius: 999px; border: 1px solid;
           white-space: nowrap;
+        }
+        .badge-bima    { color: #f59e0b; border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+        .badge-setting { color: #60a5fa; border-color: #60a5fa; background: rgba(96,165,250,0.1); }
+        .drillHint {
+          font-size: 10px; font-weight: 700;
+          color: var(--accent); opacity: 0.7;
         }
         .value {
           font-family: var(--font-display);
