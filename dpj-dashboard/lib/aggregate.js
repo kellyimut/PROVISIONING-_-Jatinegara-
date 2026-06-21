@@ -57,8 +57,23 @@ function filterBySettingDate(records, dateISO) {
   return records.filter((r) => r.settingDateISO === dateISO);
 }
 
+function filterBySettingMonth(records, monthKey) {
+  return records.filter((r) => r.settingDateISO && r.settingDateISO.slice(0, 7) === monthKey);
+}
+
 function filterByMonth(records, monthKey) {
   return records.filter((r) => r.orderMonthKey === monthKey);
+}
+
+function listAvailableSettingMonths(records) {
+  const set = new Set();
+  records.forEach((r) => {
+    if (r.settingDateISO) set.add(r.settingDateISO.slice(0, 7));
+  });
+  set.add(getJakartaMonthKey());
+  return Array.from(set)
+    .sort((a, b) => (a < b ? 1 : -1))
+    .map((key) => ({ key, label: monthKeyLabel(key) }));
 }
 
 function isCompwork(statusBima) {
@@ -107,8 +122,10 @@ module.exports = {
   monthKeyLabel,
   todayLabel,
   listAvailableMonths,
+  listAvailableSettingMonths,
   filterByDate,
   filterBySettingDate,
+  filterBySettingMonth,
   filterByMonth,
   isCompwork,
   statusBreakdown,
