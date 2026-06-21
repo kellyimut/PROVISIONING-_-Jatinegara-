@@ -10,6 +10,7 @@ import StatusBreakdown from "../components/StatusBreakdown";
 import TechnicianProductivity from "../components/TechnicianProductivity";
 import OrdersTable from "../components/OrdersTable";
 import DrillDownModal from "../components/DrillDownModal";
+import SettingTodayTable from "../components/SettingTodayTable";
 
 import {
   getJakartaToday,
@@ -18,6 +19,7 @@ import {
   monthKeyLabel,
   listAvailableMonths,
   filterByDate,
+  filterBySettingDate,
   filterByMonth,
   statusBreakdown,
   kpiRePs,
@@ -94,6 +96,9 @@ export default function Home() {
   const tableRecords = tableMode === "harian" ? todayRecords : monthRecords;
 
   const topTeknisiToday = useMemo(() => technicianStats(todayRecords)[0], [todayRecords]);
+
+  // Order yang dijadwalkan SETTING hari ini (berdasarkan kolom Tanggal Setting)
+  const settingTodayRecords = useMemo(() => filterBySettingDate(records, today), [records, today]);
 
   // Baris COMPWORK untuk drill-down RE/PS
   const compworkToday  = useMemo(() => todayRecords.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())), [todayRecords]);
@@ -204,6 +209,14 @@ export default function Home() {
               rows
             )}
           />
+        </SectionCard>
+
+        {/* ---------------- SETTING HARI INI ---------------- */}
+        <SectionCard
+          eyebrow="Jadwal Setting"
+          title={`Order Setting Hari Ini · ${todayLabel(today)} (${settingTodayRecords.length} order)`}
+        >
+          <SettingTodayTable rows={settingTodayRecords} compworkValues={COMPWORK_VALUES} />
         </SectionCard>
 
         {/* ---------------- DETAIL TABLE ---------------- */}
