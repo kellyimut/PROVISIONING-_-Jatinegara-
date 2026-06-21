@@ -2,115 +2,129 @@ const { FIELDS, STO_FILTER } = require("../config/columns");
 const { normalizeHeader } = require("./normalize");
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || "1OrlF3MSls5P9IPRcx3yHgFgWRVlAQPMzkgDSlvlMpEk";
-const SHEET_GID = process.env.GOOGLE_SHEET_GID || "0";
-
-// headers=0 -> minta Google JANGAN menebak baris header sendiri. Beberapa
-// spreadsheet (termasuk sumber dashboard ini) punya baris judul/section di
-// ATAS baris header asli, jadi deteksi header dilakukan sendiri di bawah
-// berdasarkan ISI sel, bukan berdasarkan posisi baris.
-const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=0&gid=${SHEET_GID}`;
+// GOOGLE_SHEET_GID bisa dikosongkan ("") supaya dashboard otomatis scan semua
+// tab sampai ketemu sheet yang berisi kolom provisioning yang dibutuhkan.
+const SHEET_GID_ENV = process.env.GOOGLE_SHEET_GID;
 
 const FIELD_KEYS = Object.keys(FIELDS);
 
 // Minimal jumlah field wajib yang harus berhasil dipetakan sebelum dashboard
-// dianggap "aman" untuk ditampilkan. Jika kurang dari ini, lebih baik gagal
-// dengan pesan jelas daripada menampilkan dashboard kosong/salah secara diam-diam.
+// dianggap "aman" untuk ditampilkan. Jika kurang dari ini, coba tab lain.
 const MIN_REQUIRED_FIELD_MATCHES = 6;
 
-// Parser untuk format tanggal khas Google Visualization API: "Date(2026,5,20)"
-// Catatan: bulan pada format ini berbasis 0 (Januari = 0).
-const GVIZ_DATE_RE = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/;
+// ----- URL builder -------------------------------------------------------
+function gvizUrl(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=0&gid=${gid}`;
+}
+function csvUrl(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+}
+
+// ----- Ambil daftar semua GID tab dari halaman HTML spreadsheet ----------
+// Dipakai sebagai fallback jika GID yang dikonfigurasi tidak menghasilkan data.
+async function fetchAllGids() {
+  try {
+    const res = await fetch(
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    const html = await res.text();
+    // Pola: "gid":1234567890 atau #gid=1234567890 di dalam teks HTML
+    const gids = new Set();
+    const re1 = /"gid"\s*:\s*(\d+)/g;
+    const re2 = /#gid=(\d+)/g;
+    let m;
+    while ((m = re1.exec(html)) !== null) gids.add(m[1]);
+    while ((m = re2.exec(html)) !== null) gids.add(m[1]);
+    // Pastikan GID 0 selalu dicoba pertama
+    const arr = Array.from(gids).filter((g) => g !== "0");
+    return ["0", ...arr];
+  } catch {
+    return ["0"];
+  }
+}
+
+// ----- Parser CSV sederhana tapi benar ----------------------------------
+function parseCsvRows(text, maxRows) {
+  const rows = [];
+  let row = [];
+  let cur = "";
+  let inQuotes = false;
+  let i = 0;
+  const len = text.length;
+  while (i < len && rows.length < maxRows) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      cur += ch; i++; continue;
+    }
+    if (ch === '"') { inQuotes = true; i++; continue; }
+    if (ch === ",") { row.push(cur); cur = ""; i++; continue; }
+    if (ch === "\r") { i++; continue; }
+    if (ch === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; i++; continue; }
+    cur += ch; i++;
+  }
+  if (rows.length < maxRows && (row.length || cur)) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+// ----- Parser tanggal ---------------------------------------------------
+const GVIZ_DATE_RE = /^Date\((\d+),(\d+),(\d+)(?:,\d+,\d+,\d+)?\)$/;
 
 function parseGvizDate(raw) {
   if (raw == null) return null;
   const match = GVIZ_DATE_RE.exec(String(raw));
   if (!match) return null;
   const [, y, m, d] = match;
-  const yyyy = Number(y);
-  const mm = String(Number(m) + 1).padStart(2, "0");
-  const dd = String(Number(d)).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`; // ISO yyyy-mm-dd, dipakai sebagai kunci filter
+  return `${Number(y)}-${String(Number(m) + 1).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
 }
 
-// Mencoba mem-parsing teks tanggal umum lain (dd/mm/yyyy, yyyy-mm-dd, dll)
-// sebagai cadangan jika kolom tanggal tersimpan sebagai teks biasa di sheet
-// (kasus ini TERKONFIRMASI terjadi di sheet sumber: kolom tanggal berisi
-// campuran teks tanggal "29/04/2026 15:38:00" dan catatan bebas seperti
-// "masuk jtn"). Asumsi format: hari/bulan/tahun (konvensi Indonesia).
 function parseLooseDate(raw) {
   if (raw == null || raw === "") return null;
   const s = String(raw).trim();
-
   const gviz = parseGvizDate(s);
   if (gviz) return gviz;
 
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
-  if (m) {
-    const [, y, mo, d] = m;
-    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  }
+  if (m) return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
 
   m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s);
   if (m) {
     let [, first, second, y] = m;
     if (y.length === 2) y = `20${y}`;
-    const a = Number(first);
-    const b = Number(second);
-
-    // Sheet sumber TERKONFIRMASI berisi campuran format tanggal teks: kebanyakan
-    // "dd/mm/yyyy" (konvensi Indonesia, mis. "20/06/2026"), tapi sebagian sel
-    // (kemungkinan sel bertipe Date asli dengan format locale AS) muncul sebagai
-    // "mm/dd/yyyy" (mis. "6/20/2026" untuk 20 Juni). Coba konvensi Indonesia
-    // dulu; jika tidak valid (mis. "bulan" > 12), coba konvensi AS sebagai
-    // cadangan -- supaya kedua gaya penulisan tetap terhitung dengan benar.
-    if (a >= 1 && a <= 31 && b >= 1 && b <= 12) {
-      return `${y}-${String(b).padStart(2, "0")}-${String(a).padStart(2, "0")}`;
-    }
-    if (b >= 1 && b <= 31 && a >= 1 && a <= 12) {
-      return `${y}-${String(a).padStart(2, "0")}-${String(b).padStart(2, "0")}`;
-    }
+    const a = Number(first), b = Number(second);
+    // Coba dd/mm (Indonesia) dulu; jika b > 12 tidak mungkin bulan, coba mm/dd
+    if (a >= 1 && a <= 31 && b >= 1 && b <= 12)
+      return `${y}-${String(b).padStart(2,"0")}-${String(a).padStart(2,"0")}`;
+    if (b >= 1 && b <= 31 && a >= 1 && a <= 12)
+      return `${y}-${String(a).padStart(2,"0")}-${String(b).padStart(2,"0")}`;
     return null;
   }
-
   return null;
 }
 
 function dateToDisplay(iso) {
   if (!iso) return "-";
-  const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const BULAN = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
   const [y, m, d] = iso.split("-").map(Number);
   return `${d} ${BULAN[m - 1]} ${y}`;
 }
 
-// ----- Helper pembacaan sel gviz ---------------------------------------
-// PENTING: ada dua kebutuhan tampilan yang berbeda dan keduanya tidak boleh
-// tertukar, karena pernah terbukti berisiko pada data nyata:
-//  - Field identitas/teks (Service No., Workorder, Status, dst) HARUS pakai
-//    nilai mentah "v" sebagai utama. Jika dipakai "f" (formatted) dan sel
-//    tersebut bertipe angka, Google Sheets bisa menambahkan pemisah ribuan
-//    (mis. "122,101,280,048") yang akan MERUSAK nomor Service No asli.
-//  - Field tanggal HANYA memakai "v" mentah untuk tujuan PARSING (lihat
-//    parseLooseDate). Untuk fallback TAMPILAN saat parsing gagal total,
-//    field tanggal justru harus pakai "f" (format manusiawi), supaya tidak
-//    pernah menampilkan teks mentah "Date(2026,4,1)" ke pengguna.
-
+// ----- Helpers pembacaan sel gviz ----------------------------------------
 function rawCellValue(cell) {
-  if (!cell) return "";
-  if (cell.v == null) return "";
+  if (!cell || cell.v == null) return "";
   return cell.v;
 }
-
-// Tampilan untuk field identitas/teks/angka: utamakan v mentah (dikonversi
-// ke string apa adanya, tanpa pemisah ribuan), baru fallback ke f.
 function textDisplay(cell) {
   if (!cell) return "";
   if (cell.v != null && cell.v !== "") return String(cell.v);
   if (cell.f != null && cell.f !== "") return cell.f;
   return "";
 }
-
-// Tampilan fallback untuk field tanggal SAJA: utamakan f (manusiawi), baru
-// fallback ke v mentah.
 function dateFallbackDisplay(cell) {
   if (!cell) return "";
   if (cell.f != null && cell.f !== "") return cell.f;
@@ -118,8 +132,7 @@ function dateFallbackDisplay(cell) {
   return "";
 }
 
-// ----- Deteksi baris header berdasarkan ISI, bukan posisi --------------
-
+// ----- Deteksi header via CSV -------------------------------------------
 function countFieldMatches(cellTexts) {
   const normalizedSet = new Set(cellTexts.map(normalizeHeader).filter(Boolean));
   let count = 0;
@@ -138,108 +151,63 @@ function findStoColumnFromTexts(cellTexts) {
   return null;
 }
 
-/**
- * Mencari baris header yang sesungguhnya dengan mencocokkan ISI selnya
- * terhadap daftar alias kolom yang kita butuhkan -- BUKAN dengan asumsi
- * "baris pertama = header". Ini menangani sheet yang punya baris
- * judul/section di atas baris header asli (terkonfirmasi terjadi pada
- * sheet sumber dashboard ini: baris 1 berisi label seperti "UPDATE MANUAL" /
- * "DATA AREA", baris 2 baru berisi header kolom sebenarnya).
- *
- * Memindai sampai 25 baris pertama dan memilih baris dengan jumlah
- * kecocokan field terbanyak.
- */
-function detectHeaderRow(cols, rows) {
-  // Jalur cepat: kalau gviz sendiri sudah berhasil menebak header dengan baik
-  // (kasus sheet "normal" tanpa baris judul ekstra), pakai itu langsung.
-  const colsLabelTexts = cols.map((c) => (c && c.label) || "");
-  if (countFieldMatches(colsLabelTexts) >= MIN_REQUIRED_FIELD_MATCHES) {
-    return { headerTexts: colsLabelTexts, dataRows: rows };
-  }
-
-  const SCAN_LIMIT = Math.min(rows.length, 25);
-  let bestIdx = -1;
-  let bestScore = 0;
+function detectHeaderRowFromCsv(csvRows) {
+  const SCAN_LIMIT = Math.min(csvRows.length, 25);
+  let bestIdx = -1, bestScore = 0;
   for (let i = 0; i < SCAN_LIMIT; i++) {
-    const texts = (rows[i].c || []).map((cell) => textDisplay(cell));
-    const score = countFieldMatches(texts);
-    if (score > bestScore) {
-      bestScore = score;
-      bestIdx = i;
-    }
+    const score = countFieldMatches(csvRows[i] || []);
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
   }
-
-  if (bestIdx !== -1 && bestScore >= MIN_REQUIRED_FIELD_MATCHES) {
-    const headerTexts = (rows[bestIdx].c || []).map((cell) => textDisplay(cell));
-    return { headerTexts, dataRows: rows.slice(bestIdx + 1) };
-  }
-
-  // Tidak ketemu header yang cukup yakin -- kembalikan apa adanya. Pemanggil
-  // akan melempar error yang jelas berdasarkan jumlah field yang berhasil
-  // dipetakan (lihat fetchSheetRecords).
-  return { headerTexts: colsLabelTexts, dataRows: rows, undetected: true };
+  if (bestIdx === -1 || bestScore < MIN_REQUIRED_FIELD_MATCHES)
+    return { headerTexts: csvRows[0] || [], headerRowIndex: -1, undetected: true };
+  return { headerTexts: csvRows[bestIdx], headerRowIndex: bestIdx, undetected: false };
 }
 
 function buildFieldIndex(headerTexts) {
-  const byNormalizedLabel = {};
+  const byNorm = {};
   headerTexts.forEach((label, idx) => {
     const norm = normalizeHeader(label);
-    if (norm && !(norm in byNormalizedLabel)) byNormalizedLabel[norm] = idx;
+    if (norm && !(norm in byNorm)) byNorm[norm] = idx;
   });
-
   const fieldIndex = {};
   FIELD_KEYS.forEach((key) => {
-    const def = FIELDS[key];
-    for (const alias of def.aliases) {
+    for (const alias of FIELDS[key].aliases) {
       const norm = normalizeHeader(alias);
-      if (norm in byNormalizedLabel) {
-        fieldIndex[key] = byNormalizedLabel[norm];
-        break;
-      }
+      if (norm in byNorm) { fieldIndex[key] = byNorm[norm]; break; }
     }
   });
-
-  const stoIndex = findStoColumnFromTexts(headerTexts);
-
-  return { fieldIndex, stoIndex };
+  return { fieldIndex, stoIndex: findStoColumnFromTexts(headerTexts) };
 }
 
-async function fetchSheetRecords() {
-  const res = await fetch(GVIZ_URL, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(
-      `Gagal mengambil data spreadsheet (HTTP ${res.status}). Pastikan sheet sudah dibagikan ke "Anyone with the link".`
-    );
-  }
-  const raw = await res.text();
+// ----- Proses satu GID: ambil CSV (header) + JSON (data) ----------------
+async function tryFetchGid(gid) {
+  const [csvRes, jsonRes] = await Promise.all([
+    fetch(csvUrl(gid), { cache: "no-store" }),
+    fetch(gvizUrl(gid), { cache: "no-store" }),
+  ]);
+  if (!csvRes.ok || !jsonRes.ok) return null; // tab tidak bisa diakses
 
-  // Respons gviz dibungkus seperti: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+  const csvText = await csvRes.text();
+  const csvRows = parseCsvRows(csvText, 30);
+  const { headerTexts, headerRowIndex, undetected } = detectHeaderRowFromCsv(csvRows);
+  if (undetected) return null; // tab ini bukan sheet provisioning
+
+  const { fieldIndex, stoIndex } = buildFieldIndex(headerTexts);
+  const matchedCount = Object.keys(fieldIndex).length;
+  if (matchedCount < MIN_REQUIRED_FIELD_MATCHES) return null;
+
+  const raw = await jsonRes.text();
   const jsonStart = raw.indexOf("{");
   const jsonEnd = raw.lastIndexOf("}");
-  if (jsonStart === -1 || jsonEnd === -1) {
-    throw new Error("Format respons spreadsheet tidak dikenali. Pastikan link/GID sheet benar.");
-  }
-  const data = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+  if (jsonStart === -1 || jsonEnd === -1) return null;
 
-  if (data.status === "error") {
-    const detail = (data.errors && data.errors[0] && data.errors[0].detailed_message) || "Akses ditolak.";
-    throw new Error(`Google Sheets menolak permintaan: ${detail}`);
-  }
+  let data;
+  try { data = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)); } catch { return null; }
+  if (data.status === "error") return null;
 
   const cols = (data.table && data.table.cols) || [];
   const allRows = (data.table && data.table.rows) || [];
-
-  const { headerTexts, dataRows, undetected } = detectHeaderRow(cols, allRows);
-  const { fieldIndex, stoIndex } = buildFieldIndex(headerTexts);
-
-  const matchedCount = Object.keys(fieldIndex).length;
-  if (undetected || matchedCount < MIN_REQUIRED_FIELD_MATCHES) {
-    const missing = FIELD_KEYS.filter((k) => !(k in fieldIndex)).map((k) => FIELDS[k].label);
-    throw new Error(
-      `Header kolom tidak terdeteksi dengan baik di spreadsheet (hanya ${matchedCount}/${FIELD_KEYS.length} kolom cocok). ` +
-        `Kolom yang tidak ketemu: ${missing.join(", ")}. Periksa nama header di sheet atau sesuaikan alias di config/columns.js.`
-    );
-  }
+  const dataRows = allRows.slice(headerRowIndex + 1);
 
   const missingFields = FIELD_KEYS.filter((k) => !(k in fieldIndex));
 
@@ -249,56 +217,87 @@ async function fetchSheetRecords() {
       const idx = fieldIndex[fieldKey];
       if (idx == null) return { raw: "", display: "" };
       const cell = c[idx];
-      const isDateField = FIELDS[fieldKey] && FIELDS[fieldKey].type === "date";
-      return {
-        raw: rawCellValue(cell),
-        display: isDateField ? dateFallbackDisplay(cell) : textDisplay(cell),
-      };
+      const isDate = FIELDS[fieldKey] && FIELDS[fieldKey].type === "date";
+      return { raw: rawCellValue(cell), display: isDate ? dateFallbackDisplay(cell) : textDisplay(cell) };
     };
 
-    const tanggalOrderBima = get("tanggalOrderBima");
-    const tanggalSetting = get("tanggalSetting");
-    const tanggalManja = get("tanggalManja");
+    const tob = get("tanggalOrderBima");
+    const ts  = get("tanggalSetting");
+    const tm  = get("tanggalManja");
 
-    const orderDateISO = parseLooseDate(tanggalOrderBima.raw) || parseLooseDate(tanggalOrderBima.display);
-    const settingDateISO = parseLooseDate(tanggalSetting.raw) || parseLooseDate(tanggalSetting.display);
-    const manjaDateISO = parseLooseDate(tanggalManja.raw) || parseLooseDate(tanggalManja.display);
+    const orderDateISO   = parseLooseDate(tob.raw) || parseLooseDate(tob.display);
+    const settingDateISO = parseLooseDate(ts.raw)  || parseLooseDate(ts.display);
+    const manjaDateISO   = parseLooseDate(tm.raw)  || parseLooseDate(tm.display);
 
     const record = {
       id: i,
-      tanggalSetting: settingDateISO ? dateToDisplay(settingDateISO) : tanggalSetting.display || "-",
-      tanggalOrderBima: orderDateISO ? dateToDisplay(orderDateISO) : tanggalOrderBima.display || "-",
-      workorderPsb: get("workorderPsb").display || "-",
+      tanggalSetting:        settingDateISO ? dateToDisplay(settingDateISO) : ts.display  || "-",
+      tanggalOrderBima:      orderDateISO   ? dateToDisplay(orderDateISO)   : tob.display || "-",
+      workorderPsb:          get("workorderPsb").display          || "-",
       workorderOdpValidation: get("workorderOdpValidation").display || "-",
-      serviceNo: get("serviceNo").display || "-",
-      crmOrderType: get("crmOrderType").display || "-",
-      statusBima: get("statusBima").display || "-",
-      tanggalManja: manjaDateISO ? dateToDisplay(manjaDateISO) : tanggalManja.display || "-",
-      progress: get("progress").display || "-",
-      reguTeknisi: get("reguTeknisi").display || "-",
-      statusQc2: get("statusQc2").display || "-",
+      serviceNo:             get("serviceNo").display             || "-",
+      crmOrderType:          get("crmOrderType").display          || "-",
+      statusBima:            get("statusBima").display            || "-",
+      tanggalManja:          manjaDateISO   ? dateToDisplay(manjaDateISO)   : tm.display  || "-",
+      progress:              get("progress").display              || "-",
+      reguTeknisi:           get("reguTeknisi").display           || "-",
+      statusQc2:             get("statusQc2").display             || "-",
       orderDateISO,
       settingDateISO,
       orderMonthKey: orderDateISO ? orderDateISO.slice(0, 7) : null,
     };
 
-    if (stoIndex != null) {
-      record._sto = textDisplay(c[stoIndex]);
-    }
-
+    if (stoIndex != null) record._sto = textDisplay(c[stoIndex]);
     return record;
   });
 
+  // Filter STO jika dikonfigurasi
   if (STO_FILTER.filterValue && stoIndex != null) {
     const target = normalizeHeader(STO_FILTER.filterValue);
     records = records.filter((r) => normalizeHeader(r._sto) === target);
   }
 
-  // Buang baris yang sama sekali kosong (tidak punya tanggal order maupun service no) --
-  // baris semacam ini biasanya hanya baris kosong sisa rentang data di sheet.
+  // Buang baris kosong total
   records = records.filter((r) => r.orderDateISO || (r.serviceNo && r.serviceNo !== "-"));
 
-  return { records, missingFields, totalColumns: cols.length };
+  return { records, missingFields, totalColumns: cols.length, gidUsed: gid };
 }
 
-module.exports = { fetchSheetRecords, parseLooseDate, dateToDisplay, detectHeaderRow, buildFieldIndex, countFieldMatches };
+// ----- Fungsi utama ------------------------------------------------------
+async function fetchSheetRecords() {
+  // 1. Kalau ada env var GOOGLE_SHEET_GID, coba dulu GID itu.
+  if (SHEET_GID_ENV && SHEET_GID_ENV.trim() !== "") {
+    const result = await tryFetchGid(SHEET_GID_ENV.trim());
+    if (result && result.records.length >= 0) return result;
+    // Jika GID env var gagal, jatuh ke auto-scan di bawah
+  }
+
+  // 2. Auto-scan: coba GID=0 dulu, lalu semua GID lain dari metadata spreadsheet.
+  const gidsToTry = ["0"];
+
+  // Tambah GID lain dari metadata (best-effort, tidak apa-apa kalau gagal)
+  try {
+    const allGids = await fetchAllGids();
+    allGids.forEach((g) => { if (!gidsToTry.includes(g)) gidsToTry.push(g); });
+  } catch { /* abaikan */ }
+
+  for (const gid of gidsToTry) {
+    const result = await tryFetchGid(gid);
+    if (result) return result;
+  }
+
+  throw new Error(
+    `Tidak ada tab di spreadsheet yang berisi kolom provisioning yang dibutuhkan (minimal ${MIN_REQUIRED_FIELD_MATCHES} dari ${FIELD_KEYS.length} kolom). ` +
+    `Pastikan sheet sudah dibagikan ke "Anyone with the link" dan nama kolomnya sesuai alias di config/columns.js.`
+  );
+}
+
+module.exports = {
+  fetchSheetRecords,
+  parseLooseDate,
+  dateToDisplay,
+  detectHeaderRowFromCsv,
+  buildFieldIndex,
+  countFieldMatches,
+  parseCsvRows,
+};
