@@ -11,6 +11,7 @@ import TechnicianProductivity from "../components/TechnicianProductivity";
 import OrdersTable from "../components/OrdersTable";
 import DrillDownModal from "../components/DrillDownModal";
 import SettingTodayTable from "../components/SettingTodayTable";
+import TeknisiHadirCard from "../components/TeknisiHadirCard";
 
 import {
   getJakartaToday,
@@ -18,8 +19,10 @@ import {
   todayLabel,
   monthKeyLabel,
   listAvailableMonths,
+  listAvailableSettingMonths,
   filterByDate,
   filterBySettingDate,
+  filterBySettingMonth,
   filterByMonth,
   statusBreakdown,
   kpiRePs,
@@ -36,6 +39,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState("");
   const [isFetching, setIsFetching] = useState(false);
 
+  // Mode tab: summary & teknisi & tabel pakai Tanggal Setting
   const [summaryMode, setSummaryMode] = useState("harian");
   const [teknisiMode, setTeknisiMode] = useState("harian");
   const [tableMode, setTableMode] = useState("harian");
@@ -45,9 +49,12 @@ export default function Home() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
 
   // Modal drill-down
-  const [modal, setModal] = useState(null); // { title, rows }
+  const [modal, setModal] = useState(null);
   const openModal = (title, rows) => setModal({ title, rows });
   const closeModal = () => setModal(null);
+
+  // Teknisi hadir dari sheet "TEKNISI HARI INI"
+  const [teknisiHadir, setTeknisiHadir] = useState({ names: [], total: 0, loading: true, error: null });
 
   const load = useCallback(async () => {
     setIsFetching(true);
@@ -72,37 +79,68 @@ export default function Home() {
     }
   }, []);
 
+  const loadTeknisi = useCallback(async () => {
+    try {
+      const res = await fetch("/api/teknisi-hadir");
+      const json = await res.json();
+      setTeknisiHadir({ names: json.names || [], total: json.total || 0, loading: false, error: json.error || null });
+    } catch (err) {
+      setTeknisiHadir({ names: [], total: 0, loading: false, error: err.message });
+    }
+  }, []);
+
   useEffect(() => {
     load();
+    loadTeknisi();
     const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [load]);
+    const id2 = setInterval(loadTeknisi, REFRESH_MS);
+    return () => { clearInterval(id); clearInterval(id2); };
+  }, [load, loadTeknisi]);
 
-  const months = useMemo(() => listAvailableMonths(records), [records]);
-  const monthLabel = monthKeyLabel(selectedMonth);
+  // --- Bulan tersedia ---
+  const settingMonths = useMemo(() => listAvailableSettingMonths(records), [records]);
+  const orderMonths   = useMemo(() => listAvailableMonths(records), [records]);
+  const monthLabel    = monthKeyLabel(selectedMonth);
 
-  const todayRecords = useMemo(() => filterByDate(records, today), [records, today]);
-  const monthRecords = useMemo(() => filterByMonth(records, selectedMonth), [records, selectedMonth]);
+  // ============================================================
+  // CARD KIRI: Order hari ini dari TANGGAL ORDER BIMA
+  // ============================================================
+  const orderBimaToday = useMemo(() => filterByDate(records, today), [records, today]);
+  const kpiOrderBima   = useMemo(() => kpiRePs(orderBimaToday), [orderBimaToday]);
 
-  const kpiToday = useMemo(() => kpiRePs(todayRecords), [todayRecords]);
-  const kpiMonth = useMemo(() => kpiRePs(monthRecords), [monthRecords]);
+  // ============================================================
+  // SEMUA CARD & SECTION LAIN: dari TANGGAL SETTING
+  // ============================================================
 
-  const summaryRecords = summaryMode === "harian" ? todayRecords : monthRecords;
+  // Setting hari ini
+  const settingToday   = useMemo(() => filterBySettingDate(records, today), [records, today]);
+  const kpiSettingToday = useMemo(() => kpiRePs(settingToday), [settingToday]);
+
+  // Setting bulan terpilih
+  const settingMonth   = useMemo(() => filterBySettingMonth(records, selectedMonth), [records, selectedMonth]);
+  const kpiSettingMonth = useMemo(() => kpiRePs(settingMonth), [settingMonth]);
+
+  // COMPWORK untuk drill-down RE/PS
+  const compworkSettingToday = useMemo(() =>
+    settingToday.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
+    [settingToday]);
+  const compworkSettingMonth = useMemo(() =>
+    settingMonth.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
+    [settingMonth]);
+
+  // Summary section (Ringkasan Status BIMA) — pakai Setting
+  const summaryRecords   = summaryMode === "harian" ? settingToday : settingMonth;
   const summaryBreakdown = useMemo(() => statusBreakdown(summaryRecords), [summaryRecords]);
 
-  const teknisiRecords = teknisiMode === "harian" ? todayRecords : monthRecords;
-  const teknisiData = useMemo(() => technicianStats(teknisiRecords), [teknisiRecords]);
+  // Produktivitas — pakai Setting
+  const teknisiRecords = teknisiMode === "harian" ? settingToday : settingMonth;
+  const teknisiData    = useMemo(() => technicianStats(teknisiRecords), [teknisiRecords]);
 
-  const tableRecords = tableMode === "harian" ? todayRecords : monthRecords;
+  // Tabel detail — pakai Setting
+  const tableRecords = tableMode === "harian" ? settingToday : settingMonth;
 
-  const topTeknisiToday = useMemo(() => technicianStats(todayRecords)[0], [todayRecords]);
-
-  // Order yang dijadwalkan SETTING hari ini (berdasarkan kolom Tanggal Setting)
-  const settingTodayRecords = useMemo(() => filterBySettingDate(records, today), [records, today]);
-
-  // Baris COMPWORK untuk drill-down RE/PS
-  const compworkToday  = useMemo(() => todayRecords.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())), [todayRecords]);
-  const compworkMonth  = useMemo(() => monthRecords.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())), [monthRecords]);
+  // Teknisi teraktif hari ini — dari Setting
+  const topTeknisiToday = useMemo(() => technicianStats(settingToday)[0], [settingToday]);
 
   return (
     <>
@@ -119,55 +157,103 @@ export default function Home() {
           </div>
         ) : null}
 
-        {/* ---------------- KPI ROW ---------------- */}
+        {/* ---------------- KPI ROW (7 card) ---------------- */}
         <div className="kpiGrid">
+
+          {/* CARD 1 — KIRI: Order hari ini dari Tanggal Order BIMA */}
           <KpiCard
-            label={`Order Hari Ini · ${todayLabel(today)}`}
-            value={kpiToday.total}
-            sub="Total order masuk hari ini"
-            onClick={() => openModal(`Detail Order Hari Ini · ${todayLabel(today)} (${kpiToday.total} order)`, todayRecords)}
+            label={`Order Masuk · ${todayLabel(today)}`}
+            value={kpiOrderBima.total}
+            sub="Order masuk hari ini (Tgl Order BIMA)"
+            badge="BIMA"
+            onClick={() => openModal(
+              `Order Masuk Hari Ini · ${todayLabel(today)} — dari Tanggal Order BIMA (${kpiOrderBima.total} order)`,
+              orderBimaToday
+            )}
           />
+
+          {/* CARD 2: Total Setting hari ini */}
+          <KpiCard
+            label={`Total Setting · ${todayLabel(today)}`}
+            value={kpiSettingToday.total}
+            sub="Total order dijadwalkan setting hari ini"
+            badge="SETTING"
+            onClick={() => openModal(
+              `Total Order Setting Hari Ini · ${todayLabel(today)} (${kpiSettingToday.total} order)`,
+              settingToday
+            )}
+          />
+
+          {/* CARD 3: RE/PS hari ini — dari Setting */}
           <KpiCard
             label="RE/PS Hari Ini"
             kind="percent"
-            percent={kpiToday.percent}
-            achieved={kpiToday.achieved}
-            sub={`${kpiToday.compwork} dari ${kpiToday.total} order COMPWORK · target ${kpiToday.target}%`}
-            onClick={() => openModal(`Detail COMPWORK Hari Ini · ${todayLabel(today)} (${kpiToday.compwork} order)`, compworkToday)}
+            percent={kpiSettingToday.percent}
+            achieved={kpiSettingToday.achieved}
+            sub={`${kpiSettingToday.compwork} dari ${kpiSettingToday.total} COMPWORK · target ${kpiSettingToday.target}%`}
+            onClick={() => openModal(
+              `COMPWORK Setting Hari Ini · ${todayLabel(today)} (${kpiSettingToday.compwork} order)`,
+              compworkSettingToday
+            )}
           />
+
+          {/* CARD 4: Setting bulan terpilih */}
           <KpiCard
-            label={`Order Bulan ${monthLabel}`}
-            value={kpiMonth.total}
-            sub="Total order pada bulan terpilih"
-            onClick={() => openModal(`Detail Order Bulan ${monthLabel} (${kpiMonth.total} order)`, monthRecords)}
+            label={`Setting Bulan ${monthLabel}`}
+            value={kpiSettingMonth.total}
+            sub="Total order setting bulan terpilih"
+            onClick={() => openModal(
+              `Order Setting Bulan ${monthLabel} (${kpiSettingMonth.total} order)`,
+              settingMonth
+            )}
           />
+
+          {/* CARD 5: RE/PS bulanan — dari Setting */}
           <KpiCard
             label={`RE/PS Bulan ${monthLabel}`}
             kind="percent"
-            percent={kpiMonth.percent}
-            achieved={kpiMonth.achieved}
-            sub={`${kpiMonth.compwork} dari ${kpiMonth.total} order COMPWORK · target ${kpiMonth.target}%`}
-            onClick={() => openModal(`Detail COMPWORK Bulan ${monthLabel} (${kpiMonth.compwork} order)`, compworkMonth)}
+            percent={kpiSettingMonth.percent}
+            achieved={kpiSettingMonth.achieved}
+            sub={`${kpiSettingMonth.compwork} dari ${kpiSettingMonth.total} COMPWORK · target ${kpiSettingMonth.target}%`}
+            onClick={() => openModal(
+              `COMPWORK Setting Bulan ${monthLabel} (${kpiSettingMonth.compwork} order)`,
+              compworkSettingMonth
+            )}
           />
+
+          {/* CARD 6: Teknisi teraktif — dari Setting */}
           <KpiCard
             label="Teknisi Teraktif Hari Ini"
             value={topTeknisiToday ? topTeknisiToday.total : 0}
             suffix=" order"
-            sub={topTeknisiToday ? topTeknisiToday.teknisi : "Belum ada order hari ini"}
-            onClick={topTeknisiToday ? () => openModal(`Order Teknisi ${topTeknisiToday.teknisi} Hari Ini`, todayRecords.filter((r) => r.reguTeknisi === topTeknisiToday.teknisi)) : undefined}
+            sub={topTeknisiToday ? topTeknisiToday.teknisi : "Belum ada setting hari ini"}
+            onClick={topTeknisiToday ? () => openModal(
+              `Order Setting ${topTeknisiToday.teknisi} Hari Ini (${topTeknisiToday.total} order)`,
+              settingToday.filter((r) => (r.reguTeknisi || "Belum Ditugaskan").trim() === topTeknisiToday.teknisi)
+            ) : undefined}
+          />
+
+          {/* CARD 7: Teknisi Hadir Hari Ini — dari sheet TEKNISI HARI INI */}
+          <TeknisiHadirCard
+            total={teknisiHadir.total}
+            names={teknisiHadir.names}
+            loading={teknisiHadir.loading}
+            error={teknisiHadir.error}
           />
         </div>
 
-        {/* ---------------- ORDER SUMMARY ---------------- */}
+        {/* ---------------- RINGKASAN STATUS BIMA — dari Setting ---------------- */}
         <SectionCard
-          eyebrow="Order Masuk"
-          title="Ringkasan Order &amp; Status BIMA"
+          eyebrow="Ringkasan Setting"
+          title="Status BIMA — Order Setting"
           right={
             <>
               <Tabs value={summaryMode} onChange={setSummaryMode}
                 options={[{ value: "harian", label: "Hari Ini" }, { value: "bulanan", label: "Bulanan" }]}
               />
-              {summaryMode === "bulanan" ? <MonthPicker months={months} value={selectedMonth} onChange={setSelectedMonth} /> : null}
+              {summaryMode === "bulanan"
+                ? <MonthPicker months={settingMonths} value={selectedMonth} onChange={setSelectedMonth} />
+                : null}
             </>
           }
         >
@@ -175,19 +261,21 @@ export default function Home() {
             total={summaryRecords.length}
             breakdown={summaryBreakdown}
             compworkValues={COMPWORK_VALUES}
-            totalLabel={summaryMode === "harian" ? `Order ${todayLabel(today)}` : `Order ${monthLabel}`}
+            totalLabel={summaryMode === "harian" ? `Setting ${todayLabel(today)}` : `Setting ${monthLabel}`}
             onClickTotal={() => openModal(
-              summaryMode === "harian" ? `Semua Order Hari Ini · ${todayLabel(today)}` : `Semua Order ${monthLabel}`,
+              summaryMode === "harian"
+                ? `Semua Order Setting Hari Ini · ${todayLabel(today)}`
+                : `Semua Order Setting ${monthLabel}`,
               summaryRecords
             )}
-            onClickStatus={(status, rows) => openModal(
-              `Order Status ${status} · ${summaryMode === "harian" ? todayLabel(today) : monthLabel} (${rows.length})`,
+            onClickStatus={(st, rows) => openModal(
+              `Status ${st} · ${summaryMode === "harian" ? todayLabel(today) : monthLabel} (${rows.length} order)`,
               rows
             )}
           />
         </SectionCard>
 
-        {/* ---------------- TECHNICIAN PRODUCTIVITY ---------------- */}
+        {/* ---------------- PRODUKTIVITAS TEKNISI — dari Setting ---------------- */}
         <SectionCard
           eyebrow="Produktivitas"
           title="Produktivitas Regu / Teknisi"
@@ -196,39 +284,45 @@ export default function Home() {
               <Tabs value={teknisiMode} onChange={setTeknisiMode}
                 options={[{ value: "harian", label: "Live Hari Ini" }, { value: "bulanan", label: "Rekap Bulanan" }]}
               />
-              {teknisiMode === "bulanan" ? <MonthPicker months={months} value={selectedMonth} onChange={setSelectedMonth} /> : null}
+              {teknisiMode === "bulanan"
+                ? <MonthPicker months={settingMonths} value={selectedMonth} onChange={setSelectedMonth} />
+                : null}
             </>
           }
         >
           <TechnicianProductivity
             data={teknisiData}
-            emptyLabel={teknisiMode === "harian" ? "Belum ada order yang ditangani hari ini." : "Belum ada data pada bulan ini."}
+            emptyLabel={teknisiMode === "harian"
+              ? "Belum ada order setting hari ini."
+              : "Belum ada data setting pada bulan ini."}
             sourceRecords={teknisiRecords}
-            onClickTeknisi={(teknisiName, rows) => openModal(
-              `Detail Order ${teknisiName} · ${teknisiMode === "harian" ? "Hari Ini" : monthLabel} (${rows.length})`,
+            onClickTeknisi={(name, rows) => openModal(
+              `Detail Setting ${name} · ${teknisiMode === "harian" ? "Hari Ini" : monthLabel} (${rows.length} order)`,
               rows
             )}
           />
         </SectionCard>
 
-        {/* ---------------- SETTING HARI INI ---------------- */}
+        {/* ---------------- TABEL SETTING HARI INI ---------------- */}
         <SectionCard
           eyebrow="Jadwal Setting"
-          title={`Order Setting Hari Ini · ${todayLabel(today)} (${settingTodayRecords.length} order)`}
+          title={`Order Setting Hari Ini · ${todayLabel(today)} (${settingToday.length} order)`}
         >
-          <SettingTodayTable rows={settingTodayRecords} compworkValues={COMPWORK_VALUES} />
+          <SettingTodayTable rows={settingToday} compworkValues={COMPWORK_VALUES} />
         </SectionCard>
 
-        {/* ---------------- DETAIL TABLE ---------------- */}
+        {/* ---------------- TABEL DETAIL — dari Setting ---------------- */}
         <SectionCard
           eyebrow="Detail Order"
-          title="Tabel Order Provisioning"
+          title="Tabel Order Provisioning (berdasarkan Tanggal Setting)"
           right={
             <>
               <Tabs value={tableMode} onChange={setTableMode}
                 options={[{ value: "harian", label: "Harian" }, { value: "bulanan", label: "Bulanan" }]}
               />
-              {tableMode === "bulanan" ? <MonthPicker months={months} value={selectedMonth} onChange={setSelectedMonth} /> : null}
+              {tableMode === "bulanan"
+                ? <MonthPicker months={settingMonths} value={selectedMonth} onChange={setSelectedMonth} />
+                : null}
             </>
           }
         >
@@ -241,7 +335,6 @@ export default function Home() {
         </footer>
       </div>
 
-      {/* Modal drill-down */}
       {modal ? (
         <DrillDownModal
           title={modal.title}
@@ -270,10 +363,11 @@ export default function Home() {
           border-radius: 8px; cursor: pointer;
         }
         .kpiGrid {
-          display: grid; grid-template-columns: repeat(5,1fr); gap: 14px;
+          display: grid; grid-template-columns: repeat(7,1fr); gap: 14px;
         }
-        @media (max-width:1100px) { .kpiGrid { grid-template-columns: repeat(3,1fr); } }
-        @media (max-width:680px)  { .kpiGrid { grid-template-columns: repeat(2,1fr); } }
+        @media (max-width:1400px) { .kpiGrid { grid-template-columns: repeat(4,1fr); } }
+        @media (max-width:900px)  { .kpiGrid { grid-template-columns: repeat(3,1fr); } }
+        @media (max-width:600px)  { .kpiGrid { grid-template-columns: repeat(2,1fr); } }
         .footer {
           margin-top: 10px; text-align: center;
           font-size: 11.5px; color: var(--text-faint); font-family: var(--font-mono);
