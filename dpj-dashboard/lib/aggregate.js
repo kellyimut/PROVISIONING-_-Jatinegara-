@@ -53,6 +53,10 @@ function filterByDate(records, dateISO) {
   return records.filter((r) => r.orderDateISO === dateISO);
 }
 
+function filterBySettingDate(records, dateISO) {
+  return records.filter((r) => r.settingDateISO === dateISO);
+}
+
 function filterByMonth(records, monthKey) {
   return records.filter((r) => r.orderMonthKey === monthKey);
 }
@@ -104,6 +108,7 @@ module.exports = {
   todayLabel,
   listAvailableMonths,
   filterByDate,
+  filterBySettingDate,
   filterByMonth,
   isCompwork,
   statusBreakdown,
