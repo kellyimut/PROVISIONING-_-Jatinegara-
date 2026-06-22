@@ -107,6 +107,8 @@ export default function Home() {
   // ============================================================
   const orderBimaToday = useMemo(() => filterByDate(records, today), [records, today]);
   const kpiOrderBima   = useMemo(() => kpiRePs(orderBimaToday), [orderBimaToday]);
+  // Dipakai khusus untuk tabel detail di bawah, yang sekarang berdasarkan Tanggal Order BIMA.
+  const orderBimaMonth = useMemo(() => filterByMonth(records, selectedMonth), [records, selectedMonth]);
 
   // ============================================================
   // SEMUA CARD & SECTION LAIN: dari TANGGAL SETTING
@@ -120,7 +122,7 @@ export default function Home() {
   const settingMonth   = useMemo(() => filterBySettingMonth(records, selectedMonth), [records, selectedMonth]);
   const kpiSettingMonth = useMemo(() => kpiRePs(settingMonth), [settingMonth]);
 
-  // COMPWORK untuk drill-down RE/PS
+  // COMPWORK untuk drill-down RE/PS (dan juga dipakai untuk card jumlah COMPWORK di bawah)
   const compworkSettingToday = useMemo(() =>
     settingToday.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [settingToday]);
@@ -136,8 +138,8 @@ export default function Home() {
   const teknisiRecords = teknisiMode === "harian" ? settingToday : settingMonth;
   const teknisiData    = useMemo(() => technicianStats(teknisiRecords), [teknisiRecords]);
 
-  // Tabel detail — pakai Setting
-  const tableRecords = tableMode === "harian" ? settingToday : settingMonth;
+  // Tabel detail — pakai Tanggal Order BIMA (sesuai permintaan terbaru)
+  const tableRecords = tableMode === "harian" ? orderBimaToday : orderBimaMonth;
 
   // Teknisi teraktif hari ini — dari Setting
   const topTeknisiToday = useMemo(() => technicianStats(settingToday)[0], [settingToday]);
@@ -157,7 +159,7 @@ export default function Home() {
           </div>
         ) : null}
 
-        {/* ---------------- KPI ROW (7 card) ---------------- */}
+        {/* ---------------- KPI ROW (9 card) ---------------- */}
         <div className="kpiGrid">
 
           {/* CARD 1 — KIRI: Order hari ini dari Tanggal Order BIMA */}
@@ -184,6 +186,17 @@ export default function Home() {
             )}
           />
 
+          {/* CARD BARU: jumlah Status BIMA = COMPWORK hari ini (Setting) */}
+          <KpiCard
+            label="COMPWORK Hari Ini"
+            value={kpiSettingToday.compwork}
+            sub="Order Setting dengan Status BIMA: COMPWORK hari ini"
+            onClick={() => openModal(
+              `COMPWORK Setting Hari Ini · ${todayLabel(today)} (${kpiSettingToday.compwork} order)`,
+              compworkSettingToday
+            )}
+          />
+
           {/* CARD 3: RE/PS hari ini — dari Setting */}
           <KpiCard
             label="RE/PS Hari Ini"
@@ -205,6 +218,17 @@ export default function Home() {
             onClick={() => openModal(
               `Order Setting Bulan ${monthLabel} (${kpiSettingMonth.total} order)`,
               settingMonth
+            )}
+          />
+
+          {/* CARD BARU: jumlah Status BIMA = COMPWORK bulan terpilih (Setting) */}
+          <KpiCard
+            label={`COMPWORK Bulan ${monthLabel}`}
+            value={kpiSettingMonth.compwork}
+            sub="Order Setting dengan Status BIMA: COMPWORK pada bulan terpilih"
+            onClick={() => openModal(
+              `COMPWORK Setting Bulan ${monthLabel} (${kpiSettingMonth.compwork} order)`,
+              compworkSettingMonth
             )}
           />
 
@@ -311,17 +335,17 @@ export default function Home() {
           <SettingTodayTable rows={settingToday} compworkValues={COMPWORK_VALUES} />
         </SectionCard>
 
-        {/* ---------------- TABEL DETAIL — dari Setting ---------------- */}
+        {/* ---------------- TABEL DETAIL — dari Tanggal Order BIMA ---------------- */}
         <SectionCard
           eyebrow="Detail Order"
-          title="Tabel Order Provisioning (berdasarkan Tanggal Setting)"
+          title="Tabel Order Provisioning (berdasarkan Tanggal Order BIMA)"
           right={
             <>
               <Tabs value={tableMode} onChange={setTableMode}
                 options={[{ value: "harian", label: "Harian" }, { value: "bulanan", label: "Bulanan" }]}
               />
               {tableMode === "bulanan"
-                ? <MonthPicker months={settingMonths} value={selectedMonth} onChange={setSelectedMonth} />
+                ? <MonthPicker months={orderMonths} value={selectedMonth} onChange={setSelectedMonth} />
                 : null}
             </>
           }
@@ -363,10 +387,8 @@ export default function Home() {
           border-radius: 8px; cursor: pointer;
         }
         .kpiGrid {
-          display: grid; grid-template-columns: repeat(7,1fr); gap: 14px;
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 14px;
         }
-        @media (max-width:1400px) { .kpiGrid { grid-template-columns: repeat(4,1fr); } }
-        @media (max-width:900px)  { .kpiGrid { grid-template-columns: repeat(3,1fr); } }
         @media (max-width:600px)  { .kpiGrid { grid-template-columns: repeat(2,1fr); } }
         .footer {
           margin-top: 10px; text-align: center;
