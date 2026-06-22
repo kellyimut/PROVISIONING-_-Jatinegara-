@@ -107,8 +107,13 @@ export default function Home() {
   // ============================================================
   const orderBimaToday = useMemo(() => filterByDate(records, today), [records, today]);
   const kpiOrderBima   = useMemo(() => kpiRePs(orderBimaToday), [orderBimaToday]);
-  // Dipakai khusus untuk tabel detail di bawah, yang sekarang berdasarkan Tanggal Order BIMA.
+  // Dipakai untuk tabel detail DAN untuk 3 card bulanan ("Order/COMPWORK/RE-PS Bulan ...")
+  // yang sekarang berdasarkan Tanggal Order BIMA, bukan Tanggal Setting.
   const orderBimaMonth = useMemo(() => filterByMonth(records, selectedMonth), [records, selectedMonth]);
+  const kpiOrderBimaMonth = useMemo(() => kpiRePs(orderBimaMonth), [orderBimaMonth]);
+  const compworkOrderBimaMonth = useMemo(() =>
+    orderBimaMonth.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
+    [orderBimaMonth]);
 
   // ============================================================
   // SEMUA CARD & SECTION LAIN: dari TANGGAL SETTING
@@ -126,6 +131,9 @@ export default function Home() {
   const compworkSettingToday = useMemo(() =>
     settingToday.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [settingToday]);
+  // Catatan: compworkSettingMonth di bawah ini SUDAH TIDAK dipakai oleh card KPI manapun
+  // lagi (3 card bulanan terkait sudah pindah ke compworkOrderBimaMonth di atas). Dibiarkan
+  // ada (tidak dihapus) supaya perubahan ini minimal & aman -- tidak memengaruhi apa pun.
   const compworkSettingMonth = useMemo(() =>
     settingMonth.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [settingMonth]);
@@ -210,38 +218,39 @@ export default function Home() {
             )}
           />
 
-          {/* CARD 4: Setting bulan terpilih */}
+          {/* CARD 4: Order bulan terpilih — PINDAH ke Tanggal Order BIMA (bukan Setting lagi) */}
           <KpiCard
-            label={`Setting Bulan ${monthLabel}`}
-            value={kpiSettingMonth.total}
-            sub="Total order setting bulan terpilih"
+            label={`Order Bulan ${monthLabel}`}
+            value={kpiOrderBimaMonth.total}
+            sub="Total order bulan terpilih (Tgl Order BIMA)"
+            badge="BIMA"
             onClick={() => openModal(
-              `Order Setting Bulan ${monthLabel} (${kpiSettingMonth.total} order)`,
-              settingMonth
+              `Order Bulan ${monthLabel} — dari Tanggal Order BIMA (${kpiOrderBimaMonth.total} order)`,
+              orderBimaMonth
             )}
           />
 
-          {/* CARD BARU: jumlah Status BIMA = COMPWORK bulan terpilih (Setting) */}
+          {/* CARD BARU: jumlah Status BIMA = COMPWORK bulan terpilih — dari Tanggal Order BIMA */}
           <KpiCard
             label={`COMPWORK Bulan ${monthLabel}`}
-            value={kpiSettingMonth.compwork}
-            sub="Order Setting dengan Status BIMA: COMPWORK pada bulan terpilih"
+            value={kpiOrderBimaMonth.compwork}
+            sub="Order dengan Status BIMA: COMPWORK pada bulan terpilih (Tgl Order BIMA)"
             onClick={() => openModal(
-              `COMPWORK Setting Bulan ${monthLabel} (${kpiSettingMonth.compwork} order)`,
-              compworkSettingMonth
+              `COMPWORK Bulan ${monthLabel} — dari Tanggal Order BIMA (${kpiOrderBimaMonth.compwork} order)`,
+              compworkOrderBimaMonth
             )}
           />
 
-          {/* CARD 5: RE/PS bulanan — dari Setting */}
+          {/* CARD 5: RE/PS bulanan — PINDAH ke Tanggal Order BIMA (bukan Setting lagi) */}
           <KpiCard
             label={`RE/PS Bulan ${monthLabel}`}
             kind="percent"
-            percent={kpiSettingMonth.percent}
-            achieved={kpiSettingMonth.achieved}
-            sub={`${kpiSettingMonth.compwork} dari ${kpiSettingMonth.total} COMPWORK · target ${kpiSettingMonth.target}%`}
+            percent={kpiOrderBimaMonth.percent}
+            achieved={kpiOrderBimaMonth.achieved}
+            sub={`${kpiOrderBimaMonth.compwork} dari ${kpiOrderBimaMonth.total} COMPWORK · target ${kpiOrderBimaMonth.target}% (Tgl Order BIMA)`}
             onClick={() => openModal(
-              `COMPWORK Setting Bulan ${monthLabel} (${kpiSettingMonth.compwork} order)`,
-              compworkSettingMonth
+              `COMPWORK Bulan ${monthLabel} — dari Tanggal Order BIMA (${kpiOrderBimaMonth.compwork} order)`,
+              compworkOrderBimaMonth
             )}
           />
 
