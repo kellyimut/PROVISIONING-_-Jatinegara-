@@ -89,8 +89,9 @@ export default function KpiCard({ label, value, suffix, sub, kind = "number", pe
           padding: 2px 6px; border-radius: 999px; border: 1px solid;
           white-space: nowrap;
         }
-        .badge-bima    { color: #f59e0b; border-color: #f59e0b; background: rgba(245,158,11,0.1); }
-        .badge-setting { color: #60a5fa; border-color: #60a5fa; background: rgba(96,165,250,0.1); }
+        .badge-bima     { color: #f59e0b; border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+        .badge-setting  { color: #60a5fa; border-color: #60a5fa; background: rgba(96,165,250,0.1); }
+        .badge-produktif{ color: #a78bfa; border-color: #a78bfa; background: rgba(167,139,250,0.1); }
         .drillHint {
           font-size: 10px; font-weight: 700;
           color: var(--accent); opacity: 0.7;
