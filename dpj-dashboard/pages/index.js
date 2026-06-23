@@ -39,7 +39,6 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState("");
   const [isFetching, setIsFetching] = useState(false);
 
-  // Mode tab: summary & teknisi & tabel pakai Tanggal Setting
   const [summaryMode, setSummaryMode] = useState("harian");
   const [teknisiMode, setTeknisiMode] = useState("harian");
   const [tableMode, setTableMode] = useState("harian");
@@ -48,12 +47,10 @@ export default function Home() {
   const currentMonthKey = getJakartaMonthKey();
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
 
-  // Modal drill-down
   const [modal, setModal] = useState(null);
   const openModal = (title, rows) => setModal({ title, rows });
   const closeModal = () => setModal(null);
 
-  // Teknisi hadir dari sheet "TEKNISI HARI INI"
   const [teknisiHadir, setTeknisiHadir] = useState({ names: [], total: 0, loading: true, error: null });
 
   const load = useCallback(async () => {
@@ -97,60 +94,44 @@ export default function Home() {
     return () => { clearInterval(id); clearInterval(id2); };
   }, [load, loadTeknisi]);
 
-  // --- Bulan tersedia ---
   const settingMonths = useMemo(() => listAvailableSettingMonths(records), [records]);
   const orderMonths   = useMemo(() => listAvailableMonths(records), [records]);
   const monthLabel    = monthKeyLabel(selectedMonth);
 
-  // ============================================================
-  // CARD KIRI: Order hari ini dari TANGGAL ORDER BIMA
-  // ============================================================
   const orderBimaToday = useMemo(() => filterByDate(records, today), [records, today]);
   const kpiOrderBima   = useMemo(() => kpiRePs(orderBimaToday), [orderBimaToday]);
-  // Dipakai untuk tabel detail DAN untuk 3 card bulanan ("Order/COMPWORK/RE-PS Bulan ...")
-  // yang sekarang berdasarkan Tanggal Order BIMA, bukan Tanggal Setting.
   const orderBimaMonth = useMemo(() => filterByMonth(records, selectedMonth), [records, selectedMonth]);
   const kpiOrderBimaMonth = useMemo(() => kpiRePs(orderBimaMonth), [orderBimaMonth]);
   const compworkOrderBimaMonth = useMemo(() =>
     orderBimaMonth.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [orderBimaMonth]);
 
-  // ============================================================
-  // SEMUA CARD & SECTION LAIN: dari TANGGAL SETTING
-  // ============================================================
-
-  // Setting hari ini
-  const settingToday   = useMemo(() => filterBySettingDate(records, today), [records, today]);
+  const settingToday    = useMemo(() => filterBySettingDate(records, today), [records, today]);
   const kpiSettingToday = useMemo(() => kpiRePs(settingToday), [settingToday]);
-
-  // Setting bulan terpilih
-  const settingMonth   = useMemo(() => filterBySettingMonth(records, selectedMonth), [records, selectedMonth]);
+  const settingMonth    = useMemo(() => filterBySettingMonth(records, selectedMonth), [records, selectedMonth]);
   const kpiSettingMonth = useMemo(() => kpiRePs(settingMonth), [settingMonth]);
 
-  // COMPWORK untuk drill-down RE/PS (dan juga dipakai untuk card jumlah COMPWORK di bawah)
   const compworkSettingToday = useMemo(() =>
     settingToday.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [settingToday]);
-  // Catatan: compworkSettingMonth di bawah ini SUDAH TIDAK dipakai oleh card KPI manapun
-  // lagi (3 card bulanan terkait sudah pindah ke compworkOrderBimaMonth di atas). Dibiarkan
-  // ada (tidak dihapus) supaya perubahan ini minimal & aman -- tidak memengaruhi apa pun.
   const compworkSettingMonth = useMemo(() =>
     settingMonth.filter((r) => COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())),
     [settingMonth]);
 
-  // Summary section (Ringkasan Status BIMA) — pakai Setting
   const summaryRecords   = summaryMode === "harian" ? settingToday : settingMonth;
   const summaryBreakdown = useMemo(() => statusBreakdown(summaryRecords), [summaryRecords]);
 
-  // Produktivitas — pakai Setting
   const teknisiRecords = teknisiMode === "harian" ? settingToday : settingMonth;
   const teknisiData    = useMemo(() => technicianStats(teknisiRecords), [teknisiRecords]);
 
-  // Tabel detail — pakai Tanggal Order BIMA (sesuai permintaan terbaru)
   const tableRecords = tableMode === "harian" ? orderBimaToday : orderBimaMonth;
 
-  // Teknisi teraktif hari ini — dari Setting
   const topTeknisiToday = useMemo(() => technicianStats(settingToday)[0], [settingToday]);
+
+  // Produktivitas = COMPWORK setting hari ini ÷ jumlah teknisi hadir
+  const produktivitasPerTeknisi = teknisiHadir.total > 0
+    ? (compworkSettingToday.length / teknisiHadir.total).toFixed(1)
+    : "-";
 
   return (
     <>
@@ -167,10 +148,10 @@ export default function Home() {
           </div>
         ) : null}
 
-        {/* ---------------- KPI ROW (9 card) ---------------- */}
+        {/* ---------------- KPI ROW (10 card) ---------------- */}
         <div className="kpiGrid">
 
-          {/* CARD 1 — KIRI: Order hari ini dari Tanggal Order BIMA */}
+          {/* CARD 1: Order hari ini dari Tanggal Order BIMA */}
           <KpiCard
             label={`Order Masuk · ${todayLabel(today)}`}
             value={kpiOrderBima.total}
@@ -194,7 +175,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD BARU: jumlah Status BIMA = COMPWORK hari ini (Setting) */}
+          {/* CARD 3: COMPWORK hari ini dari Setting */}
           <KpiCard
             label="COMPWORK Hari Ini"
             value={kpiSettingToday.compwork}
@@ -205,7 +186,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD 3: RE/PS hari ini — dari Setting */}
+          {/* CARD 4: RE/PS hari ini dari Setting */}
           <KpiCard
             label="RE/PS Hari Ini"
             kind="percent"
@@ -218,7 +199,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD 4: Order bulan terpilih — PINDAH ke Tanggal Order BIMA (bukan Setting lagi) */}
+          {/* CARD 5: Order bulan terpilih dari Tanggal Order BIMA */}
           <KpiCard
             label={`Order Bulan ${monthLabel}`}
             value={kpiOrderBimaMonth.total}
@@ -230,7 +211,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD BARU: jumlah Status BIMA = COMPWORK bulan terpilih — dari Tanggal Order BIMA */}
+          {/* CARD 6: COMPWORK bulan terpilih dari Tanggal Order BIMA */}
           <KpiCard
             label={`COMPWORK Bulan ${monthLabel}`}
             value={kpiOrderBimaMonth.compwork}
@@ -241,7 +222,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD 5: RE/PS bulanan — PINDAH ke Tanggal Order BIMA (bukan Setting lagi) */}
+          {/* CARD 7: RE/PS bulanan dari Tanggal Order BIMA */}
           <KpiCard
             label={`RE/PS Bulan ${monthLabel}`}
             kind="percent"
@@ -254,7 +235,7 @@ export default function Home() {
             )}
           />
 
-          {/* CARD 6: Teknisi teraktif — dari Setting */}
+          {/* CARD 8: Teknisi teraktif dari Setting */}
           <KpiCard
             label="Teknisi Teraktif Hari Ini"
             value={topTeknisiToday ? topTeknisiToday.total : 0}
@@ -266,12 +247,29 @@ export default function Home() {
             ) : undefined}
           />
 
-          {/* CARD 7: Teknisi Hadir Hari Ini — dari sheet TEKNISI HARI INI */}
+          {/* CARD 9: Teknisi Hadir Hari Ini dari sheet TEKNISI HARI INI */}
           <TeknisiHadirCard
             total={teknisiHadir.total}
             names={teknisiHadir.names}
             loading={teknisiHadir.loading}
             error={teknisiHadir.error}
+          />
+
+          {/* CARD 10: Produktivitas = COMPWORK setting hari ini ÷ teknisi hadir */}
+          <KpiCard
+            label="Produktivitas / Teknisi"
+            value={produktivitasPerTeknisi}
+            suffix={teknisiHadir.total > 0 ? " order" : ""}
+            sub={
+              teknisiHadir.total > 0
+                ? `${compworkSettingToday.length} COMPWORK ÷ ${teknisiHadir.total} teknisi hadir`
+                : "Data teknisi hadir belum tersedia"
+            }
+            badge="PRODUKTIF"
+            onClick={compworkSettingToday.length > 0 ? () => openModal(
+              `COMPWORK Setting Hari Ini · ${todayLabel(today)} (${compworkSettingToday.length} order)`,
+              compworkSettingToday
+            ) : undefined}
           />
         </div>
 
@@ -398,7 +396,7 @@ export default function Home() {
         .kpiGrid {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 14px;
         }
-        @media (max-width:600px)  { .kpiGrid { grid-template-columns: repeat(2,1fr); } }
+        @media (max-width:600px) { .kpiGrid { grid-template-columns: repeat(2,1fr); } }
         .footer {
           margin-top: 10px; text-align: center;
           font-size: 11.5px; color: var(--text-faint); font-family: var(--font-mono);
