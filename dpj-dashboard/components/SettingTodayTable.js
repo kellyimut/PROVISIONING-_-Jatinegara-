@@ -2,41 +2,42 @@ import { useMemo, useState, useCallback } from "react";
 import { statusColor } from "../lib/statusColor";
 
 const COLUMNS = [
-  { key: "tanggalSetting",        label: "Tgl Setting" },
-  { key: "tanggalOrderBima",      label: "Tgl Order BIMA" },
-  { key: "workorderPsb",          label: "Workorder PSB" },
-  { key: "serviceNo",             label: "Service No." },
-  { key: "crmOrderType",          label: "Order Type" },
-  { key: "statusBima",            label: "Status BIMA" },
-  { key: "progress",              label: "Progress" },
-  { key: "reguTeknisi",           label: "Regu/Teknisi" },
-  { key: "statusQc2",             label: "Status QC2" },
+  { key: "tanggalSetting",   label: "Tgl Setting" },
+  { key: "tanggalOrderBima", label: "Tgl Order BIMA" },
+  { key: "workorderPsb",     label: "Workorder PSB" },
+  { key: "serviceNo",        label: "Service No." },
+  { key: "crmOrderType",     label: "Order Type" },
+  { key: "statusBima",       label: "Status BIMA",   editable: true },
+  { key: "progress",         label: "Progress",      editable: true },
+  { key: "reguTeknisi",      label: "Regu/Teknisi",  editable: true },
+  { key: "statusQc2",        label: "Status QC2",    editable: true },
 ];
 
-// ── Inline editor untuk STATUS QC2 ──────────────────────────────────────────
-function Qc2Cell({ row, compworkValues, onSaved }) {
-  const [editing, setEditing]   = useState(false);
-  const [value, setValue]       = useState(row.statusQc2 && row.statusQc2 !== "-" ? row.statusQc2 : "");
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState("");
-  const [saved, setSaved]       = useState(false);
+// ── Generic inline text editor ───────────────────────────────────────────────
+function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue]     = useState(row[fieldKey] && row[fieldKey] !== "-" ? row[fieldKey] : "");
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState("");
+  const [saved, setSaved]     = useState(false);
 
-  const color = statusColor(row.statusQc2, compworkValues);
+  const isStatus = fieldKey === "statusBima" || fieldKey === "statusQc2";
+  const color = isStatus ? statusColor(row[fieldKey], compworkValues) : null;
 
   const handleSave = useCallback(async () => {
     if (saving) return;
-    setSaving(true);
-    setError("");
+    setSaving(true); setError("");
     try {
-      const res = await fetch("/api/update-qc2", {
+      const body = { workorderPsb: row.workorderPsb };
+      body[apiField] = value.trim();
+      const res = await fetch("/api/update-setting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workorderPsb: row.workorderPsb, statusQc2: value.trim() }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.message || "Gagal menyimpan.");
-      setSaved(true);
-      setEditing(false);
+      setSaved(true); setEditing(false);
       if (onSaved) onSaved(row.workorderPsb, value.trim());
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -44,14 +45,12 @@ function Qc2Cell({ row, compworkValues, onSaved }) {
     } finally {
       setSaving(false);
     }
-  }, [row.workorderPsb, value, saving, onSaved]);
+  }, [row.workorderPsb, value, saving, onSaved, apiField]);
 
   const handleCancel = () => {
-    setValue(row.statusQc2 && row.statusQc2 !== "-" ? row.statusQc2 : "");
-    setEditing(false);
-    setError("");
+    setValue(row[fieldKey] && row[fieldKey] !== "-" ? row[fieldKey] : "");
+    setEditing(false); setError("");
   };
-
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleSave();
     if (e.key === "Escape") handleCancel();
@@ -59,126 +58,89 @@ function Qc2Cell({ row, compworkValues, onSaved }) {
 
   if (editing) {
     return (
-      <td className="qc2Cell editing">
+      <td className="editCell editing">
         <div className="editWrap">
           <input
-            autoFocus
-            value={value}
+            autoFocus value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Isi status QC2…"
-            disabled={saving}
-            className="qc2Input"
+            placeholder={`Isi ${fieldKey}…`}
+            disabled={saving} className="editInput"
           />
           <div className="editActions">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="btnSave"
-              title="Simpan (Enter)"
-            >
+            <button type="button" onClick={handleSave} disabled={saving} className="btnSave" title="Simpan (Enter)">
               {saving ? "…" : "✓"}
             </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={saving}
-              className="btnCancel"
-              title="Batal (Esc)"
-            >
-              ✕
-            </button>
+            <button type="button" onClick={handleCancel} disabled={saving} className="btnCancel" title="Batal (Esc)">✕</button>
           </div>
         </div>
         {error && <div className="errMsg">{error}</div>}
         <style jsx>{`
-          .qc2Cell { min-width: 200px; }
-          .qc2Cell.editing { padding: 6px 8px !important; }
+          .editCell { min-width: 160px; }
+          .editCell.editing { padding: 6px 8px !important; }
           .editWrap { display: flex; align-items: center; gap: 4px; }
-          .qc2Input {
+          .editInput {
             flex: 1; background: var(--surface);
             border: 1px solid var(--accent); border-radius: 6px;
             color: var(--text); font-size: 12px; padding: 5px 8px;
-            outline: none; font-family: var(--font-body);
-            min-width: 0;
+            outline: none; font-family: var(--font-body); min-width: 0;
           }
-          .qc2Input:disabled { opacity: 0.6; }
+          .editInput:disabled { opacity: 0.6; }
           .editActions { display: flex; gap: 3px; flex-shrink: 0; }
           .btnSave {
             background: var(--success, #34d399); color: #0a2e1f;
             border: none; border-radius: 5px; font-weight: 800;
-            font-size: 12px; padding: 4px 8px; cursor: pointer;
-            min-width: 28px;
+            font-size: 12px; padding: 4px 8px; cursor: pointer; min-width: 28px;
           }
           .btnSave:disabled { opacity: 0.5; cursor: not-allowed; }
           .btnCancel {
             background: var(--surface-2); color: var(--text-dim);
             border: 1px solid var(--border); border-radius: 5px;
-            font-size: 11px; padding: 4px 7px; cursor: pointer;
-            min-width: 28px;
+            font-size: 11px; padding: 4px 7px; cursor: pointer; min-width: 28px;
           }
           .btnCancel:hover { border-color: var(--danger); color: var(--danger); }
-          .errMsg {
-            font-size: 10.5px; color: var(--danger);
-            margin-top: 4px; white-space: normal;
-          }
+          .errMsg { font-size: 10.5px; color: var(--danger); margin-top: 4px; white-space: normal; }
         `}</style>
       </td>
     );
   }
 
   return (
-    <td className="qc2Cell">
-      <div className="qc2Row">
-        {row.statusQc2 && row.statusQc2 !== "-" ? (
-          <span className="chip" style={{ color, borderColor: color }}>{row.statusQc2}</span>
+    <td className="editCell">
+      <div className="cellRow">
+        {row[fieldKey] && row[fieldKey] !== "-" ? (
+          color
+            ? <span className="chip" style={{ color, borderColor: color }}>{row[fieldKey]}</span>
+            : <span className="cellVal">{row[fieldKey]}</span>
         ) : (
           <span className="empty">—</span>
         )}
-        {saved && <span className="savedBadge">✓ Tersimpan</span>}
+        {saved && <span className="savedBadge">✓</span>}
         <button
-          type="button"
-          className="editBtn"
-          onClick={() => { setSaved(false); setEditing(true); }}
-          title="Edit STATUS QC2"
-        >
-          ✏
-        </button>
+          type="button" className="editBtn"
+          onClick={() => { setSaved(false); setValue(row[fieldKey] && row[fieldKey] !== "-" ? row[fieldKey] : ""); setEditing(true); }}
+          title={`Edit ${fieldKey}`}
+        >✏</button>
       </div>
       <style jsx>{`
-        .qc2Cell { min-width: 190px; }
-        .qc2Row {
-          display: flex; align-items: center; gap: 6px;
-          flex-wrap: nowrap;
-        }
+        .editCell { min-width: 140px; }
+        .cellRow { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+        .cellVal { font-size: 12.5px; color: var(--text); }
         .chip {
           display: inline-block; padding: 2px 9px; border-radius: 999px;
           font-size: 11px; font-weight: 700; border: 1px solid;
           background: rgba(127,127,127,0.1); white-space: nowrap;
         }
         .empty { color: var(--text-faint); font-size: 12px; }
-        .savedBadge {
-          font-size: 10px; font-weight: 700;
-          color: var(--success, #34d399);
-          white-space: nowrap;
-        }
+        .savedBadge { font-size: 10px; font-weight: 700; color: var(--success, #34d399); white-space: nowrap; }
         .editBtn {
           background: transparent; border: 1px solid transparent;
           color: var(--text-faint); font-size: 11px;
           border-radius: 5px; cursor: pointer; padding: 2px 5px;
-          opacity: 0; transition: opacity 0.15s, border-color 0.15s, color 0.15s;
-          flex-shrink: 0;
+          opacity: 0; transition: opacity 0.15s, border-color 0.15s, color 0.15s; flex-shrink: 0;
         }
-        .qc2Row:hover .editBtn {
-          opacity: 1;
-          border-color: var(--border);
-          color: var(--accent);
-        }
-        .editBtn:hover {
-          background: var(--accent-soft);
-          border-color: var(--accent) !important;
-        }
+        .cellRow:hover .editBtn { opacity: 1; border-color: var(--border); color: var(--accent); }
+        .editBtn:hover { background: var(--accent-soft); border-color: var(--accent) !important; }
       `}</style>
     </td>
   );
@@ -187,18 +149,19 @@ function Qc2Cell({ row, compworkValues, onSaved }) {
 // ── Komponen utama ───────────────────────────────────────────────────────────
 export default function SettingTodayTable({ rows, compworkValues }) {
   const [query, setQuery] = useState("");
-  // Simpan update lokal supaya tampilan langsung berubah tanpa nunggu refresh
   const [localUpdates, setLocalUpdates] = useState({});
 
-  const handleSaved = useCallback((workorderPsb, newValue) => {
-    setLocalUpdates((prev) => ({ ...prev, [workorderPsb]: newValue }));
+  const handleSaved = useCallback((workorderPsb, field, newValue) => {
+    setLocalUpdates((prev) => ({
+      ...prev,
+      [workorderPsb]: { ...(prev[workorderPsb] || {}), [field]: newValue },
+    }));
   }, []);
 
-  // Gabungkan data rows dengan update lokal
   const mergedRows = useMemo(() =>
     rows.map((r) =>
-      r.workorderPsb in localUpdates
-        ? { ...r, statusQc2: localUpdates[r.workorderPsb] }
+      localUpdates[r.workorderPsb]
+        ? { ...r, ...localUpdates[r.workorderPsb] }
         : r
     ),
     [rows, localUpdates]
@@ -258,21 +221,18 @@ export default function SettingTodayTable({ rows, compworkValues }) {
           </svg>
           <input
             placeholder="Cari service no, teknisi…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={query} onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         <div className="meta">
           <span>{filtered.length} dari {rows.length} order setting hari ini</span>
-          <button type="button" onClick={handleExport} className="exportBtn">
-            ⬇ Ekspor CSV
-          </button>
+          <button type="button" onClick={handleExport} className="exportBtn">⬇ Ekspor CSV</button>
         </div>
       </div>
 
-      {/* Keterangan cara edit */}
+      {/* Hint */}
       <div className="editHint">
-        <span>✏ Klik ikon pensil pada kolom <strong>Status QC2</strong> untuk update langsung ke spreadsheet</span>
+        <span>✏ Kolom <strong>Status BIMA</strong>, <strong>Progress</strong>, <strong>Regu/Teknisi</strong>, dan <strong>Status QC2</strong> bisa diedit — hover baris lalu klik ikon pensil</span>
       </div>
 
       {/* Tabel */}
@@ -284,7 +244,7 @@ export default function SettingTodayTable({ rows, compworkValues }) {
               {COLUMNS.map((c) => (
                 <th key={c.key}>
                   {c.label}
-                  {c.key === "statusQc2" && <span className="editableHint"> ✏</span>}
+                  {c.editable && <span className="editableHint"> ✏</span>}
                 </th>
               ))}
             </tr>
@@ -303,28 +263,20 @@ export default function SettingTodayTable({ rows, compworkValues }) {
                 <tr key={r.workorderPsb || r.id}>
                   <td className="num">{i + 1}</td>
                   {COLUMNS.map((c) => {
-                    // Kolom STATUS QC2 — pakai Qc2Cell dengan tombol edit
-                    if (c.key === "statusQc2") {
+                    if (c.editable) {
                       return (
-                        <Qc2Cell
-                          key="statusQc2"
+                        <InlineEditCell
+                          key={c.key}
                           row={r}
+                          fieldKey={c.key}
+                          apiField={c.key}
                           compworkValues={compworkValues}
-                          onSaved={handleSaved}
+                          onSaved={(wo, val) => handleSaved(wo, c.key, val)}
                         />
                       );
                     }
-                    // Kolom STATUS BIMA — chip warna seperti sebelumnya
-                    if (c.key === "statusBima") {
-                      const color = statusColor(r[c.key], compworkValues);
-                      return (
-                        <td key={c.key}>
-                          <span className="chip" style={{ color, borderColor: color }}>{r[c.key]}</span>
-                        </td>
-                      );
-                    }
                     const mono = c.key.startsWith("workorder") || c.key === "serviceNo";
-                    return <td key={c.key} className={mono ? "mono" : ""}>{r[c.key]}</td>;
+                    return <td key={c.key} className={mono ? "mono" : ""}>{r[c.key] || "—"}</td>;
                   })}
                 </tr>
               ))
@@ -337,42 +289,28 @@ export default function SettingTodayTable({ rows, compworkValues }) {
         .wrap { display: flex; flex-direction: column; gap: 14px; }
         .summary {
           display: flex; flex-wrap: wrap; gap: 8px;
-          padding: 10px 14px;
-          background: var(--surface-2);
-          border: 1px solid var(--border);
-          border-radius: 10px;
+          padding: 10px 14px; background: var(--surface-2);
+          border: 1px solid var(--border); border-radius: 10px;
         }
         .techChip {
           display: flex; align-items: center; gap: 6px;
           background: var(--surface); border: 1px solid var(--border);
-          border-radius: 999px; padding: 4px 12px;
-          font-size: 12px;
+          border-radius: 999px; padding: 4px 12px; font-size: 12px;
         }
         .techName { color: var(--text); font-weight: 600; }
-        .techCount {
-          color: var(--accent); font-weight: 700;
-          font-family: var(--font-mono); font-size: 11px;
-        }
-        .toolbar {
-          display: flex; align-items: center;
-          justify-content: space-between; gap: 12px; flex-wrap: wrap;
-        }
+        .techCount { color: var(--accent); font-weight: 700; font-family: var(--font-mono); font-size: 11px; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .search {
           display: flex; align-items: center; gap: 8px;
           background: var(--surface-2); border: 1px solid var(--border);
           border-radius: 10px; padding: 8px 12px;
-          color: var(--text-faint); flex: 1;
-          min-width: 200px; max-width: 360px;
+          color: var(--text-faint); flex: 1; min-width: 200px; max-width: 360px;
         }
         .search input {
           border: none; background: transparent; color: var(--text);
-          font-size: 13px; outline: none; width: 100%;
-          font-family: var(--font-body);
+          font-size: 13px; outline: none; width: 100%; font-family: var(--font-body);
         }
-        .meta {
-          display: flex; align-items: center; gap: 12px;
-          font-size: 12.5px; color: var(--text-dim);
-        }
+        .meta { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); }
         .exportBtn {
           background: var(--surface-2); border: 1px solid var(--border);
           color: var(--text); font-weight: 600; font-size: 12.5px;
@@ -381,21 +319,15 @@ export default function SettingTodayTable({ rows, compworkValues }) {
         .exportBtn:hover { border-color: var(--accent); color: var(--accent); }
         .editHint {
           font-size: 11.5px; color: var(--text-faint);
-          padding: 6px 10px;
-          background: var(--surface-2);
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          display: flex; align-items: center; gap: 6px;
+          padding: 6px 10px; background: var(--surface-2);
+          border: 1px solid var(--border); border-radius: 8px;
         }
         .editHint strong { color: var(--text-dim); }
         .tableScroll {
           overflow-x: auto; border: 1px solid var(--border);
           border-radius: var(--radius-md); max-height: 480px; overflow-y: auto;
         }
-        table {
-          border-collapse: collapse; width: 100%;
-          font-size: 12.5px; min-width: 960px;
-        }
+        table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 960px; }
         thead th {
           position: sticky; top: 0; z-index: 1;
           background: var(--surface-2); text-align: left;
@@ -405,23 +337,12 @@ export default function SettingTodayTable({ rows, compworkValues }) {
           border-bottom: 1px solid var(--border); white-space: nowrap;
         }
         .editableHint { color: var(--accent); font-size: 10px; }
-        tbody td {
-          padding: 9px 12px; border-bottom: 1px solid var(--border);
-          color: var(--text); white-space: nowrap;
-        }
+        tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
         tbody tr:nth-child(even) { background: rgba(127,127,127,0.035); }
         tbody tr:hover { background: var(--accent-soft); }
         .num { color: var(--text-faint); font-size: 11px; width: 36px; text-align: right; }
         .mono { font-family: var(--font-mono); font-size: 11.5px; }
-        .chip {
-          display: inline-block; padding: 2px 9px; border-radius: 999px;
-          font-size: 11px; font-weight: 700; border: 1px solid;
-          background: rgba(127,127,127,0.1); white-space: nowrap;
-        }
-        .emptyCell {
-          text-align: center; color: var(--text-faint);
-          padding: 28px 0 !important; white-space: normal;
-        }
+        .emptyCell { text-align: center; color: var(--text-faint); padding: 28px 0 !important; white-space: normal; }
       `}</style>
     </div>
   );
