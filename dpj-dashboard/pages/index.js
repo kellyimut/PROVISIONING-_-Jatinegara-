@@ -133,10 +133,25 @@ export default function Home() {
     ? (compworkSettingToday.length / teknisiHadir.total).toFixed(1)
     : "-";
 
-  // Hitung total belum compwork untuk judul section
-  const belumCompworkCount = useMemo(() =>
-    records.filter((r) => !COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())).length,
-    [records]);
+  // Hitung total belum compwork bulan berjalan untuk judul section
+  const belumCompworkCount = useMemo(() => {
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const BULAN = { Jan:"01",Feb:"02",Mar:"03",Apr:"04",Mei:"05",Jun:"06",Jul:"07",Agu:"08",Sep:"09",Okt:"10",Nov:"11",Des:"12" };
+    const toMonthKey = (displayStr) => {
+      if (!displayStr || displayStr === "-") return null;
+      const m1 = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(displayStr);
+      if (m1) return `${m1[3]}-${BULAN[m1[2]] || "00"}`;
+      const m2 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(displayStr);
+      if (m2) return `${m2[3]}-${m2[2].padStart(2,"0")}`;
+      return null;
+    };
+    return records.filter((r) => {
+      const bukanCompwork = !COMPWORK_VALUES.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase());
+      const bulanSetting = toMonthKey(r.tanggalSetting);
+      return bukanCompwork && bulanSetting === currentMonthKey;
+    }).length;
+  }, [records]);
 
   return (
     <>
