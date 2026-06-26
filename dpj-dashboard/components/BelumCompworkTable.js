@@ -175,12 +175,34 @@ export default function BelumCompworkTable({ rows, compworkValues }) {
     setLocalTgl((prev) => ({ ...prev, [workorderPsb]: newTgl }));
   }, []);
 
-  // Filter: Status BIMA bukan COMPWORK
+  // Bulan berjalan dalam format "YYYY-MM" waktu Jakarta
+  const currentMonthKey = useMemo(() => {
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  }, []);
+
+  // Helper parse display date ke monthKey "YYYY-MM"
+  const toMonthKey = (displayStr) => {
+    if (!displayStr || displayStr === "-") return null;
+    const BULAN = { Jan:"01",Feb:"02",Mar:"03",Apr:"04",Mei:"05",Jun:"06",Jul:"07",Agu:"08",Sep:"09",Okt:"10",Nov:"11",Des:"12" };
+    // "26 Jun 2026"
+    const m1 = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(displayStr);
+    if (m1) return `${m1[3]}-${BULAN[m1[2]] || "00"}`;
+    // "26/06/2026"
+    const m2 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(displayStr);
+    if (m2) return `${m2[3]}-${m2[2].padStart(2,"0")}`;
+    return null;
+  };
+
+  // Filter: Status BIMA bukan COMPWORK + Tanggal Setting bulan berjalan
   const belumCompwork = useMemo(() =>
-    rows.filter((r) =>
-      !compworkValues.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase())
-    ),
-    [rows, compworkValues]
+    rows.filter((r) => {
+      const bukanCompwork = !compworkValues.some((v) => v.toUpperCase() === String(r.statusBima || "").trim().toUpperCase());
+      const bulanSetting = toMonthKey(r.tanggalSetting);
+      const bulanSesuai = bulanSetting === currentMonthKey;
+      return bukanCompwork && bulanSesuai;
+    }),
+    [rows, compworkValues, currentMonthKey]
   );
 
   // Gabungkan dengan update lokal Tgl Setting
