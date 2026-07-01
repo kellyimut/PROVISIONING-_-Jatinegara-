@@ -1,20 +1,50 @@
 import { useMemo, useState, useCallback } from "react";
 import { statusColor } from "../lib/statusColor";
 
+// ── Daftar opsi dropdown (sesuai master di spreadsheet) ─────────────────────
+const STATUS_BIMA_OPTIONS = ["COMPWORK", "CANCLWORK", "WAPPR", "WORKFAIL"];
+
+const PROGRESS_OPTIONS = [
+  "Belum Dispatch",
+  "Kendala Non Teknik",
+  "Aktif di pelanggan",
+  "Kendala Teknik",
+  "Manja H+",
+  "Cek Lokasi",
+];
+
+const REGU_TEKNISI_OPTIONS = [
+  "JTN | DADAN FAIRUSSALAM",
+  "JTN | ASEP SUNANDAR",
+  "JTN | DENY SAEFUL RACHMAN",
+  "JTN | RENDI",
+  "JTN | DADAN RAMDANI",
+  "JTN | ALAN FERDINO",
+  "JTN | ZAENAL FIKRI",
+  "JTN | ARIS KRISMANTO",
+  "JTN | DEDI SUSANTO",
+  "JTN | IQBAL FAHMI",
+  "JTN | LINGGA YOGI PRAYOGA",
+  "JTN | TRI AJI SULISTIYONO",
+  "JTN | JAJAT",
+  "JTN | BARLAY",
+  "JTN | MUHAMMAD SAYYIDI TRIYANSAH",
+];
+
 const COLUMNS = [
   { key: "tanggalSetting",   label: "Tgl Setting" },
   { key: "tanggalOrderBima", label: "Tgl Order BIMA" },
   { key: "workorderPsb",     label: "Workorder PSB" },
   { key: "serviceNo",        label: "Service No." },
   { key: "crmOrderType",     label: "Order Type" },
-  { key: "statusBima",       label: "Status BIMA",   editable: true },
-  { key: "progress",         label: "Progress",      editable: true },
-  { key: "reguTeknisi",      label: "Regu/Teknisi",  editable: true },
-  { key: "statusQc2",        label: "Status QC2",    editable: true },
+  { key: "statusBima",       label: "Status BIMA",   editable: true, options: STATUS_BIMA_OPTIONS },
+  { key: "progress",         label: "Progress",      editable: true, options: PROGRESS_OPTIONS },
+  { key: "reguTeknisi",      label: "Regu/Teknisi",  editable: true, options: REGU_TEKNISI_OPTIONS },
+  { key: "statusQc2",        label: "Status QC2",    editable: true }, // teks bebas
 ];
 
-// ── Generic inline text editor ───────────────────────────────────────────────
-function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
+// ── Generic inline editor (dropdown jika ada "options", teks jika tidak) ────
+function InlineEditCell({ row, fieldKey, apiField, compworkValues, options, onSaved }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue]     = useState(row[fieldKey] && row[fieldKey] !== "-" ? row[fieldKey] : "");
   const [saving, setSaving]   = useState(false);
@@ -23,13 +53,15 @@ function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
 
   const isStatus = fieldKey === "statusBima" || fieldKey === "statusQc2";
   const color = isStatus ? statusColor(row[fieldKey], compworkValues) : null;
+  const isDropdown = Array.isArray(options) && options.length > 0;
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (valToSave) => {
     if (saving) return;
+    const finalVal = (valToSave !== undefined ? valToSave : value).trim();
     setSaving(true); setError("");
     try {
       const body = { workorderPsb: row.workorderPsb };
-      body[apiField] = value.trim();
+      body[apiField] = finalVal;
       const res = await fetch("/api/update-setting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,7 +70,7 @@ function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
       const json = await res.json();
       if (!json.ok) throw new Error(json.message || "Gagal menyimpan.");
       setSaved(true); setEditing(false);
-      if (onSaved) onSaved(row.workorderPsb, value.trim());
+      if (onSaved) onSaved(row.workorderPsb, finalVal);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(err.message || "Terjadi kesalahan.");
@@ -60,15 +92,29 @@ function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
     return (
       <td className="editCell editing">
         <div className="editWrap">
-          <input
-            autoFocus value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Isi ${fieldKey}…`}
-            disabled={saving} className="editInput"
-          />
+          {isDropdown ? (
+            <select
+              autoFocus value={value}
+              onChange={(e) => { setValue(e.target.value); }}
+              onKeyDown={handleKeyDown}
+              disabled={saving} className="editInput editSelect"
+            >
+              <option value="">— Pilih {fieldKey} —</option>
+              {options.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              autoFocus value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`Isi ${fieldKey}…`}
+              disabled={saving} className="editInput"
+            />
+          )}
           <div className="editActions">
-            <button type="button" onClick={handleSave} disabled={saving} className="btnSave" title="Simpan (Enter)">
+            <button type="button" onClick={() => handleSave()} disabled={saving} className="btnSave" title="Simpan (Enter)">
               {saving ? "…" : "✓"}
             </button>
             <button type="button" onClick={handleCancel} disabled={saving} className="btnCancel" title="Batal (Esc)">✕</button>
@@ -85,6 +131,7 @@ function InlineEditCell({ row, fieldKey, apiField, compworkValues, onSaved }) {
             color: var(--text); font-size: 12px; padding: 5px 8px;
             outline: none; font-family: var(--font-body); min-width: 0;
           }
+          .editSelect { appearance: auto; cursor: pointer; }
           .editInput:disabled { opacity: 0.6; }
           .editActions { display: flex; gap: 3px; flex-shrink: 0; }
           .btnSave {
@@ -271,6 +318,7 @@ export default function SettingTodayTable({ rows, compworkValues }) {
                           fieldKey={c.key}
                           apiField={c.key}
                           compworkValues={compworkValues}
+                          options={c.options}
                           onSaved={(wo, val) => handleSaved(wo, c.key, val)}
                         />
                       );
