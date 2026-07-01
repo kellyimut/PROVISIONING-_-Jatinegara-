@@ -141,9 +141,7 @@ export default function IndibizDashboard() {
         </div>
       ) : null}
 
-      <div className="updatedRow">
-        {lastUpdated ? <span>Diperbarui {lastUpdated}</span> : <span>Memuat data INDIBIZ…</span>}
-      </div>
+
 
       {/* ---------------- FILTER ---------------- */}
       <SectionCard eyebrow="Filter" title="Filter Data INDIBIZ">
