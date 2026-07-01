@@ -145,6 +145,35 @@ export default function IndibizDashboard() {
         {lastUpdated ? <span>Diperbarui {lastUpdated}</span> : <span>Memuat data INDIBIZ…</span>}
       </div>
 
+      {/* ---------------- FILTER ---------------- */}
+      <SectionCard eyebrow="Filter" title="Filter Data INDIBIZ">
+        <div className="filterRow">
+          <select value={filterTahun} onChange={(e) => { setFilterTahun(e.target.value); setPage(1); }}>
+            <option value="">Semua Tahun</option>
+            {tahunOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={filterBulan} onChange={(e) => { setFilterBulan(e.target.value); setPage(1); }}>
+            <option value="">Semua Bulan</option>
+            {bulanOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={filterTanggal} onChange={(e) => { setFilterTanggal(e.target.value); setPage(1); }}>
+            <option value="">Semua Tanggal</option>
+            {tanggalOptions.map((t) => <option key={t.iso} value={t.iso}>{t.display}</option>)}
+          </select>
+          <select value={filterTeknisi} onChange={(e) => { setFilterTeknisi(e.target.value); setPage(1); }}>
+            <option value="">Semua Teknisi</option>
+            {teknisiOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}>
+            <option value="">Semua Status</option>
+            {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {(filterTahun || filterBulan || filterTanggal || filterTeknisi || filterStatus) && (
+            <button type="button" className="resetBtn" onClick={resetFilters}>✕ Reset filter</button>
+          )}
+        </div>
+      </SectionCard>
+
       {/* ---------------- KPI ROW ---------------- */}
       <div className="kpiGrid">
         <KpiCard
@@ -182,35 +211,6 @@ export default function IndibizDashboard() {
             <span>{completeCount} COMPLETE</span>
             <span>{total} Total Order</span>
           </div>
-        </div>
-      </SectionCard>
-
-      {/* ---------------- FILTER ---------------- */}
-      <SectionCard eyebrow="Filter" title="Filter Data INDIBIZ">
-        <div className="filterRow">
-          <select value={filterTahun} onChange={(e) => { setFilterTahun(e.target.value); setPage(1); }}>
-            <option value="">Semua Tahun</option>
-            {tahunOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={filterBulan} onChange={(e) => { setFilterBulan(e.target.value); setPage(1); }}>
-            <option value="">Semua Bulan</option>
-            {bulanOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select value={filterTanggal} onChange={(e) => { setFilterTanggal(e.target.value); setPage(1); }}>
-            <option value="">Semua Tanggal</option>
-            {tanggalOptions.map((t) => <option key={t.iso} value={t.iso}>{t.display}</option>)}
-          </select>
-          <select value={filterTeknisi} onChange={(e) => { setFilterTeknisi(e.target.value); setPage(1); }}>
-            <option value="">Semua Teknisi</option>
-            {teknisiOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}>
-            <option value="">Semua Status</option>
-            {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {(filterTahun || filterBulan || filterTanggal || filterTeknisi || filterStatus) && (
-            <button type="button" className="resetBtn" onClick={resetFilters}>✕ Reset filter</button>
-          )}
         </div>
       </SectionCard>
 
