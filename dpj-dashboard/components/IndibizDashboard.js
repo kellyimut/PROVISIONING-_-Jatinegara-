@@ -24,6 +24,7 @@ export default function IndibizDashboard() {
   const [lastUpdated, setLastUpdated] = useState("");
   const [isFetching, setIsFetching] = useState(false);
 
+  const [filterTahun, setFilterTahun] = useState("");
   const [filterBulan, setFilterBulan] = useState("");
   const [filterTeknisi, setFilterTeknisi] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -58,18 +59,25 @@ export default function IndibizDashboard() {
     return () => clearInterval(id);
   }, [load]);
 
+  const tahunOptions = useMemo(() => {
+    const years = records
+      .map((r) => (r.tglISO ? r.tglISO.slice(0, 4) : null))
+      .filter(Boolean);
+    return Array.from(new Set(years)).sort((a, b) => b.localeCompare(a)); // terbaru dulu
+  }, [records]);
   const bulanOptions = useMemo(() => uniqueSorted(records.map((r) => r.bulan)), [records]);
   const teknisiOptions = useMemo(() => uniqueSorted(records.map((r) => r.teknisi)), [records]);
   const statusOptions = useMemo(() => uniqueSorted(records.map((r) => r.status)), [records]);
 
   const filtered = useMemo(() => {
     return records.filter((r) => {
+      if (filterTahun && (!r.tglISO || r.tglISO.slice(0, 4) !== filterTahun)) return false;
       if (filterBulan && r.bulan !== filterBulan) return false;
       if (filterTeknisi && r.teknisi !== filterTeknisi) return false;
       if (filterStatus && r.status !== filterStatus) return false;
       return true;
     });
-  }, [records, filterBulan, filterTeknisi, filterStatus]);
+  }, [records, filterTahun, filterBulan, filterTeknisi, filterStatus]);
 
   const total = filtered.length;
   const completeCount = useMemo(
@@ -99,7 +107,7 @@ export default function IndibizDashboard() {
   );
 
   const resetFilters = () => {
-    setFilterBulan(""); setFilterTeknisi(""); setFilterStatus(""); setPage(1);
+    setFilterTahun(""); setFilterBulan(""); setFilterTeknisi(""); setFilterStatus(""); setPage(1);
   };
 
   return (
@@ -159,6 +167,10 @@ export default function IndibizDashboard() {
       {/* ---------------- FILTER ---------------- */}
       <SectionCard eyebrow="Filter" title="Filter Data INDIBIZ">
         <div className="filterRow">
+          <select value={filterTahun} onChange={(e) => { setFilterTahun(e.target.value); setPage(1); }}>
+            <option value="">Semua Tahun</option>
+            {tahunOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
           <select value={filterBulan} onChange={(e) => { setFilterBulan(e.target.value); setPage(1); }}>
             <option value="">Semua Bulan</option>
             {bulanOptions.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -171,7 +183,7 @@ export default function IndibizDashboard() {
             <option value="">Semua Status</option>
             {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {(filterBulan || filterTeknisi || filterStatus) && (
+          {(filterTahun || filterBulan || filterTeknisi || filterStatus) && (
             <button type="button" className="resetBtn" onClick={resetFilters}>✕ Reset filter</button>
           )}
         </div>
