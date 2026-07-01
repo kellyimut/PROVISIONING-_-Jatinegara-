@@ -9,8 +9,8 @@ const INDIBIZ_SHEET_NAME = process.env.GOOGLE_SHEET_INDIBIZ_NAME || "INDIBIZ";
 const FIELDS_INDIBIZ = {
   tgl:              { aliases: ["TGL", "TANGGAL"], type: "date" },
   paket:            { aliases: ["PAKET"], type: "text" },
-  noOrder:          { aliases: ["NO ORDER", "NO. ORDER", "NOMOR ORDER"], type: "text" },
-  noInternetTelp:   { aliases: ["NO INTERNET/NO TELP", "NO INTERNET / NO TELP", "NO INTERNET", "NO TELP"], type: "text" },
+  noOrder:          { aliases: ["NO ORDER", "NO. ORDER", "NOMOR ORDER", "NO  ORDER"], type: "text" },
+  noInternetTelp:   { aliases: ["NO INTERNET/NO TELP", "NO INTERNET / NO TELP", "NO INTERNET /NO TELP", "NO INTERNET/ NO TELP", "NO INTERNET", "NO TELP", "NO. INTERNET / NO. TELP"], type: "text" },
   status:           { aliases: ["STATUS"], type: "text" },
   update:           { aliases: ["UPDATE"], type: "text" },
   detailKeterangan: { aliases: ["DETAIL KETERANGAN", "KETERANGAN"], type: "text" },
@@ -81,11 +81,26 @@ function buildFieldIndex(headerTexts) {
     const norm = normalizeHeader(label);
     if (norm && !(norm in byNorm)) byNorm[norm] = idx;
   });
+  // Fallback super-toleran: buang semua karakter selain huruf/angka, upper-case.
+  // Ini mengantisipasi perbedaan spasi ganda, spasi di sekitar "/", dsb pada header sheet.
+  const stripAlnum = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const byAlnum = {};
+  headerTexts.forEach((label, idx) => {
+    const alnum = stripAlnum(label);
+    if (alnum && !(alnum in byAlnum)) byAlnum[alnum] = idx;
+  });
+
   const fieldIndex = {};
   FIELD_KEYS.forEach((key) => {
     for (const alias of FIELDS_INDIBIZ[key].aliases) {
       const norm = normalizeHeader(alias);
       if (norm in byNorm) { fieldIndex[key] = byNorm[norm]; break; }
+    }
+    if (!(key in fieldIndex)) {
+      for (const alias of FIELDS_INDIBIZ[key].aliases) {
+        const alnum = stripAlnum(alias);
+        if (alnum in byAlnum) { fieldIndex[key] = byAlnum[alnum]; break; }
+      }
     }
   });
   return fieldIndex;
