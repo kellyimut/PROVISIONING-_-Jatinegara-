@@ -1,18 +1,25 @@
 export default function Tabs({ options, value, onChange }) {
   return (
     <div className="tabs" role="tablist">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          role="tab"
-          aria-selected={value === opt.value}
-          className={value === opt.value ? "active" : ""}
-          onClick={() => onChange(opt.value)}
-          type="button"
-        >
-          {opt.label}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const isActive = value === opt.value;
+        const customStyle = isActive && opt.color
+          ? { background: opt.color, color: "#06141f", boxShadow: `0 4px 14px -4px ${opt.color}` }
+          : undefined;
+        return (
+          <button
+            key={opt.value}
+            role="tab"
+            aria-selected={isActive}
+            className={isActive ? "active" : ""}
+            style={customStyle}
+            onClick={() => onChange(opt.value)}
+            type="button"
+          >
+            {opt.label}
+          </button>
+        );
+      })}
       <style jsx>{`
         .tabs {
           display: inline-flex;
