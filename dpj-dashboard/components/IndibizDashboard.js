@@ -64,6 +64,23 @@ export default function IndibizDashboard() {
     setFilterTanggal("");
   }, [filterTahun, filterBulan]);
 
+  // Tanggal hari ini (Asia/Jakarta), dipakai untuk tabel "ORDER HARI INI" — live,
+  // tidak terpengaruh filter Tahun/Bulan/Tanggal di atas.
+  const todayISO = useMemo(
+    () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date()),
+    []
+  );
+  const todayLabelStr = useMemo(
+    () => new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta", day: "2-digit", month: "long", year: "numeric",
+    }).format(new Date()),
+    []
+  );
+  const todayRecords = useMemo(
+    () => records.filter((r) => r.tglISO === todayISO),
+    [records, todayISO]
+  );
+
   const tahunOptions = useMemo(() => {
     const years = records
       .map((r) => (r.tglISO ? r.tglISO.slice(0, 4) : null))
@@ -199,16 +216,50 @@ export default function IndibizDashboard() {
         />
       </div>
 
-      {/* ---------------- PROGRESS BAR COMPLETION ---------------- */}
-      <SectionCard eyebrow="Progres" title={`Completion Rate — ${percent}%`}>
-        <div className="progressWrap">
-          <div className="progressTrack">
-            <div className="progressFill" style={{ width: `${Math.min(percent, 100)}%` }} />
-          </div>
-          <div className="progressLabels">
-            <span>{completeCount} COMPLETE</span>
-            <span>{total} Total Order</span>
-          </div>
+      {/* ---------------- ORDER HARI INI (LIVE) ---------------- */}
+      <SectionCard
+        eyebrow="Live"
+        title={`Order Hari Ini · ${todayLabelStr} (${todayRecords.length} order)`}
+      >
+        <div className="tableScroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>TGL</th>
+                <th>PAKET</th>
+                <th>NO ORDER</th>
+                <th>NO INTERNET/NO TELP</th>
+                <th>STATUS</th>
+                <th>UPDATE</th>
+                <th>DETAIL KETERANGAN</th>
+                <th>TEKNISI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todayRecords.length === 0 ? (
+                <tr><td colSpan={9} className="emptyCell">Belum ada order INDIBIZ hari ini.</td></tr>
+              ) : (
+                todayRecords.map((r, i) => (
+                  <tr key={r.id}>
+                    <td className="num">{i + 1}</td>
+                    <td>{r.tgl}</td>
+                    <td>{r.paket}</td>
+                    <td className="mono">{r.noOrder}</td>
+                    <td className="mono">{r.noInternetTelp}</td>
+                    <td>
+                      <span className="chip" style={{ color: colorForStatus(r.status), borderColor: colorForStatus(r.status) }}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td>{r.update}</td>
+                    <td className="wrapCell">{r.detailKeterangan}</td>
+                    <td>{r.teknisi}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 
