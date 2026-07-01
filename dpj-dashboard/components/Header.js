@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ThemeSwitcher from "./ThemeSwitcher";
+import Tabs from "./Tabs";
 
 function useJakartaClock() {
   const [now, setNow] = useState("");
@@ -25,7 +26,12 @@ function useJakartaClock() {
   return now;
 }
 
-export default function Header({ status, lastUpdated, onRefresh, isFetching }) {
+const DASHBOARD_TABS = [
+  { value: "tsel", label: "TSEL", color: "#f87171" },
+  { value: "indibiz", label: "INDIBIZ", color: "#34d399" },
+];
+
+export default function Header({ status, lastUpdated, onRefresh, isFetching, activeTab, onTabChange }) {
   const clock = useJakartaClock();
 
   return (
@@ -38,6 +44,12 @@ export default function Header({ status, lastUpdated, onRefresh, isFetching }) {
             <p className="sub">Pengawasan order &amp; produktivitas provisioning FTTH STO Jatinegara, sumber data Google Spreadsheet</p>
           </div>
         </div>
+
+        {activeTab && onTabChange ? (
+          <div className="tabRow">
+            <Tabs options={DASHBOARD_TABS} value={activeTab} onChange={onTabChange} />
+          </div>
+        ) : null}
       </div>
 
       <div className="right">
@@ -81,10 +93,18 @@ export default function Header({ status, lastUpdated, onRefresh, isFetching }) {
           gap: 16px 20px;
           margin-bottom: 22px;
         }
+        .left {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
         .brandRow {
           display: flex;
           align-items: center;
           gap: 14px;
+        }
+        .tabRow {
+          display: flex;
         }
         .mark {
           flex: none;
