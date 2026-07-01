@@ -131,7 +131,15 @@ function InlineEditCell({ row, fieldKey, apiField, compworkValues, options, onSa
             color: var(--text); font-size: 12px; padding: 5px 8px;
             outline: none; font-family: var(--font-body); min-width: 0;
           }
-          .editSelect { appearance: auto; cursor: pointer; }
+          .editSelect {
+            appearance: auto; cursor: pointer;
+            background-color: var(--surface, #1e1b3a);
+            color: var(--text, #f1f1f6);
+          }
+          .editSelect option {
+            background-color: var(--surface, #1e1b3a);
+            color: var(--text, #f1f1f6);
+          }
           .editInput:disabled { opacity: 0.6; }
           .editActions { display: flex; gap: 3px; flex-shrink: 0; }
           .btnSave {
