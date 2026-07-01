@@ -26,6 +26,7 @@ export default function IndibizDashboard() {
 
   const [filterTahun, setFilterTahun] = useState("");
   const [filterBulan, setFilterBulan] = useState("");
+  const [filterTanggal, setFilterTanggal] = useState("");
   const [filterTeknisi, setFilterTeknisi] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -59,6 +60,10 @@ export default function IndibizDashboard() {
     return () => clearInterval(id);
   }, [load]);
 
+  useEffect(() => {
+    setFilterTanggal("");
+  }, [filterTahun, filterBulan]);
+
   const tahunOptions = useMemo(() => {
     const years = records
       .map((r) => (r.tglISO ? r.tglISO.slice(0, 4) : null))
@@ -66,6 +71,21 @@ export default function IndibizDashboard() {
     return Array.from(new Set(years)).sort((a, b) => b.localeCompare(a)); // terbaru dulu
   }, [records]);
   const bulanOptions = useMemo(() => uniqueSorted(records.map((r) => r.bulan)), [records]);
+  const tanggalOptions = useMemo(() => {
+    // Opsi tanggal mengikuti Tahun & Bulan yang sedang dipilih (cascading)
+    const scoped = records.filter((r) => {
+      if (filterTahun && (!r.tglISO || r.tglISO.slice(0, 4) !== filterTahun)) return false;
+      if (filterBulan && r.bulan !== filterBulan) return false;
+      return true;
+    });
+    const map = new Map();
+    scoped.forEach((r) => {
+      if (r.tglISO) map.set(r.tglISO, r.tgl);
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([iso, display]) => ({ iso, display }));
+  }, [records, filterTahun, filterBulan]);
   const teknisiOptions = useMemo(() => uniqueSorted(records.map((r) => r.teknisi)), [records]);
   const statusOptions = useMemo(() => uniqueSorted(records.map((r) => r.status)), [records]);
 
@@ -73,11 +93,12 @@ export default function IndibizDashboard() {
     return records.filter((r) => {
       if (filterTahun && (!r.tglISO || r.tglISO.slice(0, 4) !== filterTahun)) return false;
       if (filterBulan && r.bulan !== filterBulan) return false;
+      if (filterTanggal && r.tglISO !== filterTanggal) return false;
       if (filterTeknisi && r.teknisi !== filterTeknisi) return false;
       if (filterStatus && r.status !== filterStatus) return false;
       return true;
     });
-  }, [records, filterTahun, filterBulan, filterTeknisi, filterStatus]);
+  }, [records, filterTahun, filterBulan, filterTanggal, filterTeknisi, filterStatus]);
 
   const total = filtered.length;
   const completeCount = useMemo(
@@ -107,7 +128,7 @@ export default function IndibizDashboard() {
   );
 
   const resetFilters = () => {
-    setFilterTahun(""); setFilterBulan(""); setFilterTeknisi(""); setFilterStatus(""); setPage(1);
+    setFilterTahun(""); setFilterBulan(""); setFilterTanggal(""); setFilterTeknisi(""); setFilterStatus(""); setPage(1);
   };
 
   return (
@@ -175,6 +196,10 @@ export default function IndibizDashboard() {
             <option value="">Semua Bulan</option>
             {bulanOptions.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
+          <select value={filterTanggal} onChange={(e) => { setFilterTanggal(e.target.value); setPage(1); }}>
+            <option value="">Semua Tanggal</option>
+            {tanggalOptions.map((t) => <option key={t.iso} value={t.iso}>{t.display}</option>)}
+          </select>
           <select value={filterTeknisi} onChange={(e) => { setFilterTeknisi(e.target.value); setPage(1); }}>
             <option value="">Semua Teknisi</option>
             {teknisiOptions.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -183,7 +208,7 @@ export default function IndibizDashboard() {
             <option value="">Semua Status</option>
             {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {(filterTahun || filterBulan || filterTeknisi || filterStatus) && (
+          {(filterTahun || filterBulan || filterTanggal || filterTeknisi || filterStatus) && (
             <button type="button" className="resetBtn" onClick={resetFilters}>✕ Reset filter</button>
           )}
         </div>
